@@ -2,15 +2,18 @@ import type * as THREE from 'three';
 import type { CameraRig } from '@/core/camera/CameraRig';
 import type { InputManager } from '@/core/input/InputManager';
 import type { Renderer } from '@/core/renderer/Renderer';
+import { BlockInteraction, type InteractionRules } from '@/gameplay/interaction/BlockInteraction';
 import { PlayerController } from '@/gameplay/movement/PlayerController';
 import { Player, PLAYER_EYE_HEIGHT } from '@/gameplay/player/Player';
 import { ChunkMeshScheduler } from '@/rendering/chunks/ChunkMeshScheduler';
 import { ChunkRenderer } from '@/rendering/chunks/ChunkRenderer';
+import { BlockHighlight } from '@/rendering/highlight/BlockHighlight';
 import type { ChunkMaterials } from '@/rendering/chunks/chunkMaterial';
 import type { TileAtlas } from '@/rendering/textures/TileAtlas';
 import { settingsStore } from '@/state/settingsStore';
 import { damp, lerp } from '@/utils/math';
 import { ChunkManager } from '@/world/chunks/ChunkManager';
+import { BlockId, PLACEABLE_BLOCKS } from '@/world/blocks/blocks';
 import { CHUNK_SIZE } from '@/world/constants';
 import { ChunkGeneratorPool } from '@/world/generation/ChunkGeneratorPool';
 import type { WorldConfig } from '@/world/generation/config';
@@ -42,6 +45,10 @@ export class WorldSession {
   readonly meshScheduler: ChunkMeshScheduler;
   readonly player = new Player();
   readonly controller: PlayerController;
+  readonly interaction: BlockInteraction;
+  private readonly highlight: BlockHighlight;
+  /** Block placed on right-click; replaced by the inventory system. */
+  private heldBlock: number = BlockId.Stone;
   private readonly pool: ChunkGeneratorPool;
   /** False until the terrain under the player has streamed in. */
   private playerReady = false;
@@ -74,12 +81,23 @@ export class WorldSession {
     this.controller.sensitivity = settings.sensitivity;
     this.controller.invertY = settings.invertY;
 
+    this.highlight = new BlockHighlight(engine.scene);
+    this.interaction = new BlockInteraction(
+      this.world,
+      this.player,
+      engine.input,
+      this.createInteractionRules(),
+    );
+
     this.unsubscribers.push(
       engine.input.events.on('mousedown', () => {
         if (!engine.input.isLocked) engine.input.requestLock();
       }),
       engine.input.events.on('keydown', ({ code }) => {
-        if (code === 'KeyF' && engine.input.isLocked) this.controller.toggleFlying();
+        if (!engine.input.isLocked) return;
+        if (code === 'KeyF') this.controller.toggleFlying();
+        const digit = /^Digit([1-9])$/.exec(code);
+        if (digit) this.heldBlock = PLACEABLE_BLOCKS[Number(digit[1]) - 1] ?? this.heldBlock;
       }),
       settingsStore.subscribe(
         (s) => s.sensitivity,
@@ -116,6 +134,8 @@ export class WorldSession {
     this.controller.look();
     this.setFocus(this.player.position.x, this.player.position.z);
     this.streamChunks();
+    if (this.playerReady) this.interaction.update(dt);
+    this.highlight.update(this.interaction.target, this.interaction.breakProgress);
 
     const kickTarget = this.player.sprinting ? (this.player.flying ? 10 : 7) : 0;
     this.fovKick = lerp(this.fovKick, kickTarget, damp(8, dt));
@@ -139,10 +159,25 @@ export class WorldSession {
     this.disposed = true;
     for (const unsubscribe of this.unsubscribers) unsubscribe();
     this.engine.cameraRig.setFovOffset(0);
+    this.interaction.dispose();
+    this.highlight.dispose();
     this.pool.dispose();
     this.meshScheduler.dispose();
     this.chunkRenderer.dispose();
     this.world.events.clear();
+  }
+
+  protected createInteractionRules(): InteractionRules {
+    return {
+      instantBreak: () => true,
+      selectedBlock: () => this.heldBlock,
+      onPlaced: () => undefined,
+      onBroken: () => undefined,
+      onPicked: (block) => {
+        if (PLACEABLE_BLOCKS.includes(block as BlockId)) this.heldBlock = block;
+      },
+      onUse: () => false,
+    };
   }
 
   protected setFocus(x: number, z: number): void {

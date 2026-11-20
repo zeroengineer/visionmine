@@ -1,5 +1,6 @@
 import './styles/base.css';
 import { Game } from '@/game/Game';
+import { createCrosshair } from '@/ui/hud/Crosshair';
 
 function showFatalError(root: HTMLElement, message: string): void {
   const box = document.createElement('div');
@@ -21,6 +22,7 @@ function boot(): void {
   try {
     const game = new Game(canvas);
     game.start();
+    ui.append(createCrosshair());
   } catch (error) {
     console.error(error);
     showFatalError(

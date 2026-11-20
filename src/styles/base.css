@@ -72,3 +72,35 @@ body {
   color: var(--muted);
   line-height: 1.5;
 }
+
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  pointer-events: none !important;
+  mix-blend-mode: difference;
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: '';
+  position: absolute;
+  background: #fff;
+}
+
+.crosshair::before {
+  left: 10px;
+  top: 2px;
+  width: 2px;
+  height: 18px;
+}
+
+.crosshair::after {
+  left: 2px;
+  top: 10px;
+  width: 18px;
+  height: 2px;
+}
