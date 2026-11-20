@@ -41,6 +41,8 @@ export interface DebugApi {
   virtualLock(locked: boolean): void;
   save(): Promise<void>;
   setTime(time: number): void;
+  /** Forces the weather immediately (it otherwise changes on a random timer). */
+  setWeather(kind: 'clear' | 'rain' | 'snow'): void;
 }
 
 export function shouldInstallDebugHook(): boolean {
@@ -104,6 +106,7 @@ export function installDebugHook(game: Game): void {
     virtualLock: (locked) => game.input.setLockOverride(locked),
     save: () => game.saveNow(),
     setTime: (time) => game.environment.cycle.setTime(time),
+    setWeather: (kind) => game.environment.weather.set(kind, true),
   };
   (window as unknown as { __visionmine: DebugApi }).__visionmine = api;
 }

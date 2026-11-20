@@ -19,6 +19,9 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        // Full Chromium in headless mode: unlike the headless shell it grants
+        // pointer lock, so mouse capture is tested for real.
+        channel: 'chromium',
         launchOptions: {
           args: [
             '--use-angle=swiftshader',
