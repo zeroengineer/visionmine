@@ -8,7 +8,9 @@ import { createScene } from '@/core/scene/createScene';
 import { createChunkMaterials, type ChunkMaterials } from '@/rendering/chunks/chunkMaterial';
 import { Lighting } from '@/rendering/lighting/Lighting';
 import { TileAtlas } from '@/rendering/textures/TileAtlas';
+import { inventoryStore } from '@/state/inventoryStore';
 import { settingsStore } from '@/state/settingsStore';
+import { uiStore } from '@/state/uiStore';
 import { DEFAULT_WORLD_CONFIG, type WorldConfig } from '@/world/generation/config';
 import { WorldSession, type EngineContext } from './WorldSession';
 
@@ -44,6 +46,11 @@ export class Game {
     this.chunkMaterials = createChunkMaterials(this.atlas.texture);
 
     this.unsubscribers.push(
+      this.input.events.on('mousedown', () => {
+        if (uiStore.getState().screen === 'playing' && !this.input.isLocked)
+          this.input.requestLock();
+      }),
+      this.input.events.on('keydown', ({ code }) => this.onKeyDown(code)),
       this.renderer.onResize((width, height) => this.cameraRig.setAspect(width, height)),
       settingsStore.subscribe(
         (s) => s.fov,
@@ -89,6 +96,19 @@ export class Game {
     return this.session;
   }
 
+  openInventory(): void {
+    if (uiStore.getState().screen !== 'playing') return;
+    uiStore.getState().setScreen('inventory');
+    this.input.exitLock();
+  }
+
+  closeInventory(): void {
+    if (uiStore.getState().screen !== 'inventory') return;
+    inventoryStore.getState().dropCursor();
+    uiStore.getState().setScreen('playing');
+    this.input.requestLock();
+  }
+
   start(): void {
     this.loop.start();
   }
@@ -103,6 +123,16 @@ export class Game {
     this.lighting.dispose();
     this.input.dispose();
     this.renderer.dispose();
+  }
+
+  private onKeyDown(code: string): void {
+    const screen = uiStore.getState().screen;
+    if (code === 'KeyE') {
+      if (screen === 'playing') this.openInventory();
+      else if (screen === 'inventory') this.closeInventory();
+    } else if (code === 'Escape' && screen === 'inventory') {
+      this.closeInventory();
+    }
   }
 
   private update(dt: number, elapsed: number): void {
