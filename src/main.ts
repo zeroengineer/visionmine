@@ -1,11 +1,8 @@
 import './styles/base.css';
 import './styles/hud.css';
+import './styles/menus.css';
 import { Game } from '@/game/Game';
-import { initBlockIcons } from '@/ui/components/blockIcon';
-import { createCrosshair } from '@/ui/hud/Crosshair';
-import { createHotbar } from '@/ui/hud/Hotbar';
-import { createUnderwaterOverlay } from '@/ui/hud/UnderwaterOverlay';
-import { createInventoryScreen } from '@/ui/inventory/InventoryScreen';
+import { mountUi } from '@/ui/App';
 
 function showFatalError(root: HTMLElement, message: string): void {
   const box = document.createElement('div');
@@ -24,17 +21,9 @@ function boot(): void {
   const ui = document.querySelector<HTMLDivElement>('#ui');
   if (!canvas || !ui) throw new Error('VISIONMINE: required root elements are missing.');
 
+  let game: Game;
   try {
-    const game = new Game(canvas);
-    game.start();
-    void game.boot().catch((error: unknown) => console.error('VISIONMINE: boot failed.', error));
-    initBlockIcons(game.atlas);
-    ui.append(
-      createUnderwaterOverlay().el,
-      createCrosshair(),
-      createHotbar().el,
-      createInventoryScreen({ onClose: () => game.closeInventory() }).el,
-    );
+    game = new Game(canvas);
   } catch (error) {
     console.error(error);
     showFatalError(
@@ -42,7 +31,15 @@ function boot(): void {
       'Your browser or graphics driver does not appear to support WebGL 2. ' +
         'Try updating your browser or enabling hardware acceleration.',
     );
+    return;
   }
+
+  mountUi(ui, game, game.atlas);
+  game.start();
+  game.boot().catch((error: unknown) => {
+    console.error('VISIONMINE: boot failed.', error);
+    showFatalError(ui, 'The game failed to initialise. Reload the page to try again.');
+  });
 }
 
 boot();

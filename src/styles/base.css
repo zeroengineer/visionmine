@@ -9,6 +9,7 @@
   --warn: #ffb648;
   --danger: #ff6b5e;
   --font: 'Trebuchet MS', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --display: 'Arial Black', 'Segoe UI Black', Impact, 'Trebuchet MS', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
@@ -43,8 +44,13 @@ body {
   pointer-events: none;
 }
 
-#ui > * {
-  pointer-events: auto;
+[hidden] {
+  display: none !important;
+}
+
+button,
+input {
+  font-family: inherit;
 }
 
 .fatal-error {
