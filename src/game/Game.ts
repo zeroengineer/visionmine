@@ -123,7 +123,12 @@ export class Game implements GameCommands {
     );
 
     this.loop = new GameLoop({
-      fixedUpdate: (step) => this.session?.fixedUpdate(step),
+      fixedUpdate: (step) => {
+        // Apply the pause state first: the simulation step runs before `update`,
+        // so a pause requested since the last frame must already hold here.
+        this.syncFrozen();
+        this.session?.fixedUpdate(step);
+      },
       update: (dt, elapsed) => this.update(dt, elapsed),
       render: (alpha) => {
         this.session?.prepareRender(alpha);
@@ -459,9 +464,7 @@ export class Game implements GameCommands {
     const session = this.session;
     const screen = uiStore.getState().screen;
     if (session) {
-      const frozen = !session.attract && (screen === 'paused' || screen === 'settings');
-      session.paused = frozen;
-      this.environment.cycle.paused = frozen;
+      const frozen = this.syncFrozen();
       session.update(dt, elapsed);
       if (!frozen) this.saveManager?.update(dt);
       if (this.loading) this.updateLoading(session);
@@ -478,6 +481,17 @@ export class Game implements GameCommands {
       camera.position,
       sessionStore.getState().underwater,
     );
+  }
+
+  /** Freezes or unfreezes the simulation and world clock to match the current screen. */
+  private syncFrozen(): boolean {
+    const session = this.session;
+    if (!session) return false;
+    const screen = uiStore.getState().screen;
+    const frozen = !session.attract && (screen === 'paused' || screen === 'settings');
+    session.paused = frozen;
+    this.environment.cycle.paused = frozen;
+    return frozen;
   }
 
   private updateLoading(session: WorldSession): void {
