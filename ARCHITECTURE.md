@@ -6,37 +6,68 @@ VISIONMINE is a **modular monolith**: one browser application, one bundle, with 
 
 ```
 src/
-  core/        Engine plumbing: game loop, renderer, camera, input, shared GPU resources
-  world/       Voxel data and rules: blocks, chunks, generation, meshing, persistence
-  gameplay/    Player, movement, collision, block interaction, inventory, game modes
-  rendering/   Everything that turns world/gameplay state into Three.js objects
-  ui/          DOM interface: screens, menus, HUD
-  state/       Zustand stores shared between gameplay and UI
-  utils/       Small pure helpers (math, RNG, hashing)
-  main.ts      Composition root
+  core/        Engine plumbing with no game rules
+    engine/      GameLoop (fixed-step simulation + interpolated rendering)
+    renderer/    WebGL renderer wrapper, quality tiers, adaptive resolution
+    camera/      Camera rig (first and third person)
+    input/       Keyboard, mouse and pointer-lock state
+    audio/       Synthesised sound effects
+    scene/ resources/
+  world/       Voxel data and rules — no Three.js, no DOM
+    blocks/      Block registry and atlas tile ids
+    chunks/      Chunk storage, coordinates, ChunkManager (streaming)
+    generation/  TerrainGenerator, world config, worker and worker pool
+    meshing/     ChunkMesher interface and the culled-face mesher
+    persistence/ Repository interface, IndexedDB and in-memory backends, codecs
+    World.ts     getBlock / setBlock facade, edits, change events
+  gameplay/    Player and rules
+    player/ movement/ collision/ interaction/ inventory/ modes/
+  rendering/   Turns world and gameplay state into Three.js objects
+    chunks/      ChunkRenderer (InstancedMesh), materials, mesh scheduler
+    environment/ Day/night cycle, sky dome, fog, weather
+    lighting/ particles/ highlight/ avatar/ textures/
+  state/       Zustand vanilla stores shared by gameplay and UI
+  ui/          DOM interface: screens, menus, HUD, inventory, components
+  game/        Composition root: Game, WorldSession, SaveManager, WorldService
+  utils/       Pure helpers (math, RNG, emitter)
+  main.ts
 ```
 
 ## Dependency rules
 
 ```
-ui ──► state ◄── gameplay ──► world
-                 rendering ──► world (read-only)
-core ◄── gameplay, rendering
+ui ──► state ◄── game ──► gameplay ──► world
+ │                 │
+ └─ GameCommands ◄─┘      rendering ──► world (read-only)
+                          core ◄── game, gameplay, rendering
 ```
 
 - `world/` never imports Three.js or the DOM. It is plain data and pure functions, so it runs unchanged in Web Workers and in Node for unit tests.
 - `rendering/` reads world data and owns every GPU object. Nothing outside `rendering/` and `core/` creates meshes, materials or textures.
-- `ui/` never touches the scene. It reads and writes Zustand stores and calls a narrow set of game commands.
-- `gameplay/` mutates the world only through the `World` facade (`getBlock` / `setBlock`).
+- `ui/` never touches the scene, the world or storage. It reads Zustand stores and calls the `GameCommands` interface, which `Game` implements.
+- `gameplay/` mutates the world only through the `World` facade.
+- `game/` is the only layer that knows about everything; it wires modules together and owns lifecycles.
 
-## Performance principles
+## Runtime structure
 
-- **No mesh per voxel.** Chunks are drawn with `InstancedMesh`; one instance per _visible block face_.
-- **World data is separate from render data.** A chunk is a `Uint8Array`; its mesh is derived and disposable.
-- **Bounded work per frame.** Generation runs in workers; meshing is time-budgeted.
-- **Explicit disposal.** Every geometry, material and texture has an owner that disposes it.
+`Game` owns the long-lived engine objects (renderer, scene, camera, input, environment, texture atlas, chunk materials). A `WorldSession` owns everything tied to one loaded world (voxel data, worker pool, chunk meshes, player, interaction, particles). Switching worlds disposes the session and creates a new one, which is also how the main-menu backdrop works: it is a session in non-interactive "attract" mode.
 
-Each section below is filled in as the corresponding phase lands.
+Each frame:
+
+1. `fixedUpdate(1/60 s)` zero or more times — player physics and TNT fuses.
+2. `update(dt)` — look input, chunk streaming and meshing, interaction raycast, particles, environment, autosave timer.
+3. `render(alpha)` — camera placed by interpolating the last two physics states, then one `renderer.render`.
+
+Screen flow is a small state machine in `uiStore.screen`:
+
+```
+boot → menu ⇄ create / worlds / settings
+          └→ loading → playing ⇄ inventory
+                          ⇅
+                        paused ⇄ settings
+```
+
+Losing pointer lock while `playing` (Escape, alt-tab) moves to `paused`; the simulation and the world clock freeze while paused.
 
 ## Voxel data and chunk pipeline
 
@@ -63,3 +94,44 @@ WorldSession                                    World.addChunk ──► event: 
 ### Introducing greedy meshing
 
 `ChunkMesher` is the only seam involved. A greedy mesher implements the same interface and emits fewer faces with `width`/`height` greater than one; the instance matrix already scales the quad and the shader already tiles the texture by the quad size (`vFaceUv = uv * size`). Nothing in `World`, `ChunkManager` or `ChunkRenderer` changes.
+
+## Player, collision and interaction
+
+- **Collision** (`gameplay/collision/aabb.ts`) — the player is an axis-aligned box moved one axis at a time (Y, X, Z) and snapped to block boundaries on contact. Moves longer than 0.45 blocks are sub-stepped, so tunnelling is impossible at any speed. No physics engine is used: against a voxel grid this is exact, deterministic and far smaller than a WASM dependency.
+- **Targeting** (`gameplay/interaction/voxelRaycast.ts`) — an Amanatides–Woo DDA walks the grid from the eye along the view direction and returns the hit block and face normal. Cost depends only on reach, never on mesh size.
+- **BlockInteraction** — break, place and pick. Mode- and inventory-specific decisions are injected as `InteractionRules`, so the module does not depend on stores. Placement is refused when the new block would overlap the player's body.
+- **TNT** — `TntManager` counts down fuses and calls `explode`, a pure function over `World` that removes a ragged sphere and reports other TNT for chain reactions.
+
+## State and UI
+
+Zustand vanilla stores (`settingsStore`, `uiStore`, `sessionStore`, `inventoryStore`) hold state that both gameplay and UI need. UI views are plain DOM built once at startup; each subscribes to the store slices it shows and updates only those nodes. The only timer-driven UI is the debug overlay (4 Hz, only while visible). Nothing in the UI runs per frame.
+
+The inventory is an immutable value (`gameplay/inventory/inventory.ts`) manipulated by pure functions; the store just holds the current value.
+
+## Persistence
+
+`WorldRepository` abstracts storage. `IndexedDbRepository` uses three object stores:
+
+| Store     | Key                | Contents                                                      |
+| --------- | ------------------ | ------------------------------------------------------------- |
+| `worlds`  | `id`               | name, seed and terrain config, game mode, time of day, dates  |
+| `chunks`  | `worldId:chunkKey` | that chunk's edits packed as `Uint32Array` (`index<<8 \| id`) |
+| `players` | `worldId`          | position, view angles, flight state, inventory                |
+
+Only edits are stored; terrain is always regenerated from the seed. `SaveManager` autosaves every 10 seconds and when the tab is hidden, writes only chunks whose edits changed, runs one save at a time and re-queues edits if a write fails.
+
+Everything read from storage passes through validators (`codec.ts`, `sanitizeInventory`, `sanitizeSettings`). A world record that cannot be parsed appears in the world list as damaged with a delete action; unreadable edits or player data fall back to the generated world. If IndexedDB cannot be opened, `MemoryRepository` takes over and the UI states that worlds will not persist.
+
+## Performance decisions
+
+| Decision                                                                | Reason                                                                                                                                 |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Instanced faces instead of instanced cubes                              | Only visible faces reach the GPU — roughly a quarter of the triangles of cube instancing — while keeping one draw call per chunk layer |
+| Manual bounding spheres per chunk mesh                                  | `InstancedMesh` would otherwise iterate every instance to compute bounds; frustum culling stays O(chunks)                              |
+| Generation in a worker pool, no queue                                   | Requests are issued nearest-first only when a worker is idle, so priorities never go stale                                             |
+| Meshing budget of 4 ms per frame                                        | Streaming never causes long frames; edits bypass the budget so building feels instant                                                  |
+| Procedural 128 × 128 atlas, nearest filtering                           | One texture and one material for all terrain; no asset downloads                                                                       |
+| One shadow map that follows the player                                  | Cost is fixed regardless of world size; resolution depends on the quality tier and can be turned off                                   |
+| GPU-animated weather, instanced debris                                  | One draw call each, no per-particle objects                                                                                            |
+| Quality tier from the GPU string, adaptive resolution from measured FPS | Sensible defaults on integrated GPUs and automatic recovery when a scene is too heavy                                                  |
+| Explicit `dispose()` on every GPU owner                                 | Unloading chunks or leaving a world returns geometry, texture and worker memory                                                        |
