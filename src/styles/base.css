@@ -1,0 +1,48 @@
+:root {
+  --bg: #0b1016;
+  --panel: rgba(16, 22, 30, 0.86);
+  --panel-edge: rgba(255, 255, 255, 0.08);
+  --text: #eef3f7;
+  --muted: #93a1b0;
+  --accent: #8ddc4f;
+  --accent-deep: #4f9a25;
+  --warn: #ffb648;
+  --danger: #ff6b5e;
+  --font: 'Trebuchet MS', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+#ui > * {
+  pointer-events: auto;
+}
