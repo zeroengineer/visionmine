@@ -1,0 +1,42 @@
+import * as THREE from 'three';
+
+/** Owns the perspective camera and keeps its projection in sync with the viewport. */
+export class CameraRig {
+  readonly camera: THREE.PerspectiveCamera;
+  private baseFov: number;
+  private fovOffset = 0;
+
+  constructor(fov: number) {
+    this.baseFov = fov;
+    this.camera = new THREE.PerspectiveCamera(fov, 1, 0.08, 1200);
+    this.camera.rotation.order = 'YXZ';
+  }
+
+  setAspect(width: number, height: number): void {
+    this.camera.aspect = width / Math.max(1, height);
+    this.camera.updateProjectionMatrix();
+  }
+
+  setFov(fov: number): void {
+    this.baseFov = fov;
+    this.applyFov();
+  }
+
+  /** Temporary additive FOV (sprint kick); cheap to call every frame. */
+  setFovOffset(offset: number): void {
+    if (Math.abs(offset - this.fovOffset) < 0.01) return;
+    this.fovOffset = offset;
+    this.applyFov();
+  }
+
+  setFar(far: number): void {
+    if (this.camera.far === far) return;
+    this.camera.far = far;
+    this.camera.updateProjectionMatrix();
+  }
+
+  private applyFov(): void {
+    this.camera.fov = this.baseFov + this.fovOffset;
+    this.camera.updateProjectionMatrix();
+  }
+}
