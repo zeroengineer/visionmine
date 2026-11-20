@@ -6,6 +6,6 @@ export const DEFAULT_SKY_COLOR = 0x8ec5ff;
 export function createScene(): THREE.Scene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(DEFAULT_SKY_COLOR);
-  scene.fog = new THREE.Fog(DEFAULT_SKY_COLOR, 60, 140);
+  scene.fog = new THREE.Fog(DEFAULT_SKY_COLOR, 50, 110);
   return scene;
 }
