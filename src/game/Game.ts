@@ -58,7 +58,10 @@ export class Game {
     this.loop = new GameLoop({
       fixedUpdate: (step) => this.session?.fixedUpdate(step),
       update: (dt, elapsed) => this.update(dt, elapsed),
-      render: () => this.renderer.render(this.scene, this.cameraRig.camera),
+      render: (alpha) => {
+        this.session?.prepareRender(alpha);
+        this.renderer.render(this.scene, this.cameraRig.camera);
+      },
     });
 
     this.loadWorld(DEFAULT_WORLD_CONFIG);

@@ -35,6 +35,12 @@ export class CameraRig {
     this.camera.updateProjectionMatrix();
   }
 
+  /** Places the camera at an eye position with the given view angles. */
+  setFirstPerson(x: number, y: number, z: number, yaw: number, pitch: number): void {
+    this.camera.position.set(x, y, z);
+    this.camera.rotation.set(pitch, yaw, 0);
+  }
+
   private applyFov(): void {
     this.camera.fov = this.baseFov + this.fovOffset;
     this.camera.updateProjectionMatrix();
