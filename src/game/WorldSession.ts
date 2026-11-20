@@ -3,6 +3,8 @@ import type { CameraRig } from '@/core/camera/CameraRig';
 import type { InputManager } from '@/core/input/InputManager';
 import type { Renderer } from '@/core/renderer/Renderer';
 import { BlockInteraction, type InteractionRules } from '@/gameplay/interaction/BlockInteraction';
+import { selectedStack, starterInventory } from '@/gameplay/inventory/inventory';
+import { GAME_MODES } from '@/gameplay/modes/gameMode';
 import { PlayerController } from '@/gameplay/movement/PlayerController';
 import { Player, PLAYER_EYE_HEIGHT } from '@/gameplay/player/Player';
 import { ChunkMeshScheduler } from '@/rendering/chunks/ChunkMeshScheduler';
@@ -10,10 +12,12 @@ import { ChunkRenderer } from '@/rendering/chunks/ChunkRenderer';
 import { BlockHighlight } from '@/rendering/highlight/BlockHighlight';
 import type { ChunkMaterials } from '@/rendering/chunks/chunkMaterial';
 import type { TileAtlas } from '@/rendering/textures/TileAtlas';
+import { inventoryStore } from '@/state/inventoryStore';
+import { sessionStore } from '@/state/sessionStore';
 import { settingsStore } from '@/state/settingsStore';
 import { damp, lerp } from '@/utils/math';
 import { ChunkManager } from '@/world/chunks/ChunkManager';
-import { BlockId, PLACEABLE_BLOCKS } from '@/world/blocks/blocks';
+import { getBlockDef } from '@/world/blocks/blocks';
 import { CHUNK_SIZE } from '@/world/constants';
 import { ChunkGeneratorPool } from '@/world/generation/ChunkGeneratorPool';
 import type { WorldConfig } from '@/world/generation/config';
@@ -47,8 +51,6 @@ export class WorldSession {
   readonly controller: PlayerController;
   readonly interaction: BlockInteraction;
   private readonly highlight: BlockHighlight;
-  /** Block placed on right-click; replaced by the inventory system. */
-  private heldBlock: number = BlockId.Stone;
   private readonly pool: ChunkGeneratorPool;
   /** False until the terrain under the player has streamed in. */
   private playerReady = false;
@@ -89,16 +91,23 @@ export class WorldSession {
       this.createInteractionRules(),
     );
 
+    inventoryStore.getState().load(starterInventory(sessionStore.getState().mode));
+    this.applyGameMode();
+
     this.unsubscribers.push(
-      engine.input.events.on('mousedown', () => {
-        if (!engine.input.isLocked) engine.input.requestLock();
-      }),
       engine.input.events.on('keydown', ({ code }) => {
         if (!engine.input.isLocked) return;
         if (code === 'KeyF') this.controller.toggleFlying();
         const digit = /^Digit([1-9])$/.exec(code);
-        if (digit) this.heldBlock = PLACEABLE_BLOCKS[Number(digit[1]) - 1] ?? this.heldBlock;
+        if (digit) inventoryStore.getState().select(Number(digit[1]) - 1);
       }),
+      engine.input.events.on('wheel', ({ direction }) => {
+        if (engine.input.isLocked) inventoryStore.getState().cycle(direction);
+      }),
+      sessionStore.subscribe(
+        (s) => s.mode,
+        () => this.applyGameMode(),
+      ),
       settingsStore.subscribe(
         (s) => s.sensitivity,
         (value) => (this.controller.sensitivity = value),
@@ -168,16 +177,30 @@ export class WorldSession {
   }
 
   protected createInteractionRules(): InteractionRules {
+    const inventory = inventoryStore;
+    const rules = () => GAME_MODES[sessionStore.getState().mode];
     return {
-      instantBreak: () => true,
-      selectedBlock: () => this.heldBlock,
-      onPlaced: () => undefined,
-      onBroken: () => undefined,
+      instantBreak: () => rules().infiniteBlocks,
+      selectedBlock: () => selectedStack(inventory.getState())?.block ?? 0,
+      onPlaced: () => {
+        if (!rules().infiniteBlocks) inventory.getState().consumeSelected(1);
+      },
+      onBroken: (block) => {
+        if (!rules().infiniteBlocks && getBlockDef(block).placeable)
+          inventory.getState().add(block, 1);
+      },
       onPicked: (block) => {
-        if (PLACEABLE_BLOCKS.includes(block as BlockId)) this.heldBlock = block;
+        if (rules().infiniteBlocks) inventory.getState().pick(block);
       },
       onUse: () => false,
     };
+  }
+
+  private applyGameMode(): void {
+    const rules = GAME_MODES[sessionStore.getState().mode];
+    this.controller.allowFlying = rules.canFly;
+    if (!rules.canFly) this.controller.setFlying(false);
+    this.interaction.reach = rules.reach;
   }
 
   protected setFocus(x: number, z: number): void {

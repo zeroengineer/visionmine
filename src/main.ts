@@ -1,6 +1,10 @@
 import './styles/base.css';
+import './styles/hud.css';
 import { Game } from '@/game/Game';
+import { initBlockIcons } from '@/ui/components/blockIcon';
 import { createCrosshair } from '@/ui/hud/Crosshair';
+import { createHotbar } from '@/ui/hud/Hotbar';
+import { createInventoryScreen } from '@/ui/inventory/InventoryScreen';
 
 function showFatalError(root: HTMLElement, message: string): void {
   const box = document.createElement('div');
@@ -22,7 +26,12 @@ function boot(): void {
   try {
     const game = new Game(canvas);
     game.start();
-    ui.append(createCrosshair());
+    initBlockIcons(game.atlas);
+    ui.append(
+      createCrosshair(),
+      createHotbar().el,
+      createInventoryScreen({ onClose: () => game.closeInventory() }).el,
+    );
   } catch (error) {
     console.error(error);
     showFatalError(
