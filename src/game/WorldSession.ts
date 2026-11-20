@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { CameraRig } from '@/core/camera/CameraRig';
 import type { InputManager } from '@/core/input/InputManager';
+import { QUALITY_PROFILES } from '@/core/renderer/quality';
 import type { Renderer } from '@/core/renderer/Renderer';
 import { BlockInteraction, type InteractionRules } from '@/gameplay/interaction/BlockInteraction';
 import { selectedStack, starterInventory } from '@/gameplay/inventory/inventory';
@@ -9,7 +10,9 @@ import { PlayerController } from '@/gameplay/movement/PlayerController';
 import { Player, PLAYER_EYE_HEIGHT } from '@/gameplay/player/Player';
 import { ChunkMeshScheduler } from '@/rendering/chunks/ChunkMeshScheduler';
 import { ChunkRenderer } from '@/rendering/chunks/ChunkRenderer';
+import type { Environment } from '@/rendering/environment/Environment';
 import { BlockHighlight } from '@/rendering/highlight/BlockHighlight';
+import { DebrisParticles } from '@/rendering/particles/DebrisParticles';
 import type { ChunkMaterials } from '@/rendering/chunks/chunkMaterial';
 import type { TileAtlas } from '@/rendering/textures/TileAtlas';
 import { inventoryStore } from '@/state/inventoryStore';
@@ -33,6 +36,7 @@ export interface EngineContext {
   renderer: Renderer;
   atlas: TileAtlas;
   chunkMaterials: ChunkMaterials;
+  environment: Environment;
 }
 
 /**
@@ -50,6 +54,7 @@ export class WorldSession {
   readonly player = new Player();
   readonly controller: PlayerController;
   readonly interaction: BlockInteraction;
+  readonly particles: DebrisParticles;
   private readonly highlight: BlockHighlight;
   private readonly pool: ChunkGeneratorPool;
   /** False until the terrain under the player has streamed in. */
@@ -84,6 +89,10 @@ export class WorldSession {
     this.controller.invertY = settings.invertY;
 
     this.highlight = new BlockHighlight(engine.scene);
+    this.particles = new DebrisParticles(
+      engine.scene,
+      512 * QUALITY_PROFILES[settings.quality].particleScale,
+    );
     this.interaction = new BlockInteraction(
       this.world,
       this.player,
@@ -95,6 +104,9 @@ export class WorldSession {
     this.applyGameMode();
 
     this.unsubscribers.push(
+      this.interaction.events.on('broken', ({ x, y, z, block }) => {
+        this.particles.burst(x + 0.5, y + 0.5, z + 0.5, getBlockDef(block).color, 14);
+      }),
       engine.input.events.on('keydown', ({ code }) => {
         if (!engine.input.isLocked) return;
         if (code === 'KeyF') this.controller.toggleFlying();
@@ -145,6 +157,10 @@ export class WorldSession {
     this.streamChunks();
     if (this.playerReady) this.interaction.update(dt);
     this.highlight.update(this.interaction.target, this.interaction.breakProgress);
+    this.particles.update(dt, this.world);
+    if (this.player.headInWater !== sessionStore.getState().underwater) {
+      sessionStore.getState().setUnderwater(this.player.headInWater);
+    }
 
     const kickTarget = this.player.sprinting ? (this.player.flying ? 10 : 7) : 0;
     this.fovKick = lerp(this.fovKick, kickTarget, damp(8, dt));
@@ -170,6 +186,8 @@ export class WorldSession {
     this.engine.cameraRig.setFovOffset(0);
     this.interaction.dispose();
     this.highlight.dispose();
+    this.particles.dispose();
+    sessionStore.getState().setUnderwater(false);
     this.pool.dispose();
     this.meshScheduler.dispose();
     this.chunkRenderer.dispose();
@@ -216,11 +234,7 @@ export class WorldSession {
 
   private applyViewDistance(renderDistance: number): void {
     const far = renderDistance * CHUNK_SIZE;
-    const fog = this.engine.scene.fog as THREE.Fog | null;
-    if (fog) {
-      fog.near = far * 0.55;
-      fog.far = far - 4;
-    }
+    this.engine.environment.setViewDistance(far - 4);
     this.engine.cameraRig.setFar(far * 2 + 300);
   }
 }

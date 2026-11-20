@@ -6,9 +6,10 @@ import { QUALITY_PROFILES } from '@/core/renderer/quality';
 import { Renderer } from '@/core/renderer/Renderer';
 import { createScene } from '@/core/scene/createScene';
 import { createChunkMaterials, type ChunkMaterials } from '@/rendering/chunks/chunkMaterial';
-import { Lighting } from '@/rendering/lighting/Lighting';
+import { Environment } from '@/rendering/environment/Environment';
 import { TileAtlas } from '@/rendering/textures/TileAtlas';
 import { inventoryStore } from '@/state/inventoryStore';
+import { sessionStore } from '@/state/sessionStore';
 import { settingsStore } from '@/state/settingsStore';
 import { uiStore } from '@/state/uiStore';
 import { DEFAULT_WORLD_CONFIG, type WorldConfig } from '@/world/generation/config';
@@ -23,7 +24,7 @@ export class Game {
   readonly scene: THREE.Scene;
   readonly cameraRig: CameraRig;
   readonly input: InputManager;
-  readonly lighting: Lighting;
+  readonly environment: Environment;
   readonly atlas: TileAtlas;
   readonly chunkMaterials: ChunkMaterials;
   private session: WorldSession | null = null;
@@ -41,7 +42,10 @@ export class Game {
     this.scene = createScene();
     this.cameraRig = new CameraRig(settings.fov);
     this.input = new InputManager(canvas);
-    this.lighting = new Lighting(this.scene);
+    this.environment = new Environment(this.scene, {
+      weatherParticles: 1500 * profile.particleScale,
+    });
+    this.applyGraphicsSettings();
     this.atlas = new TileAtlas();
     this.chunkMaterials = createChunkMaterials(this.atlas.texture);
 
@@ -59,6 +63,10 @@ export class Game {
       settingsStore.subscribe(
         (s) => s.quality,
         (quality) => this.renderer.setMaxPixelRatio(QUALITY_PROFILES[quality].maxPixelRatio),
+      ),
+      settingsStore.subscribe(
+        (s) => `${s.quality}|${s.shadows}|${s.weather}|${s.dayLengthMinutes}`,
+        () => this.applyGraphicsSettings(),
       ),
     );
 
@@ -82,6 +90,7 @@ export class Game {
       renderer: this.renderer,
       atlas: this.atlas,
       chunkMaterials: this.chunkMaterials,
+      environment: this.environment,
     };
   }
 
@@ -120,9 +129,19 @@ export class Game {
     this.session = null;
     this.chunkMaterials.dispose();
     this.atlas.dispose();
-    this.lighting.dispose();
+    this.environment.dispose();
     this.input.dispose();
     this.renderer.dispose();
+  }
+
+  private applyGraphicsSettings(): void {
+    const settings = settingsStore.getState();
+    const profile = QUALITY_PROFILES[settings.quality];
+    this.environment.lighting.setShadowMapSize(
+      settings.shadows ? profile.shadowMapSize || 1024 : 0,
+    );
+    this.environment.weather.enabled = settings.weather;
+    this.environment.cycle.dayLengthSeconds = settings.dayLengthMinutes * 60;
   }
 
   private onKeyDown(code: string): void {
@@ -138,5 +157,15 @@ export class Game {
   private update(dt: number, elapsed: number): void {
     this.chunkMaterials.time.value = elapsed;
     this.session?.update(dt, elapsed);
+
+    const camera = this.cameraRig.camera;
+    const focus = this.session?.player.position ?? camera.position;
+    this.environment.update(
+      dt,
+      elapsed,
+      focus,
+      camera.position,
+      sessionStore.getState().underwater,
+    );
   }
 }

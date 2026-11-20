@@ -328,3 +328,17 @@
   font-size: 13px;
   color: var(--muted);
 }
+
+/* ---- Underwater tint ------------------------------------------------------ */
+.underwater {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(24, 92, 170, 0.28), rgba(6, 40, 92, 0.6));
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none !important;
+}
+
+.underwater.is-active {
+  opacity: 1;
+}
