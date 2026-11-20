@@ -12,8 +12,13 @@ import { TileAtlas } from '@/rendering/textures/TileAtlas';
 import { settingsStore } from '@/state/settingsStore';
 import { FaceMesher } from '@/world/meshing/FaceMesher';
 import type { ChunkMesher } from '@/world/meshing/types';
+import { Chunk } from '@/world/chunks/Chunk';
+import { DEFAULT_WORLD_CONFIG } from '@/world/generation/config';
+import { TerrainGenerator, type SpawnPoint } from '@/world/generation/TerrainGenerator';
 import { World } from '@/world/World';
-import { buildShowcaseWorld, SHOWCASE_GROUND } from './showcaseWorld';
+
+/** Chunk radius generated around the spawn point until streaming is in place. */
+const PREVIEW_RADIUS = 5;
 
 /**
  * Composition root for the running game: owns the engine objects and drives
@@ -31,6 +36,8 @@ export class Game {
   readonly world: World;
   private readonly mesher: ChunkMesher = new FaceMesher();
   private readonly dirtyChunks = new Set<number>();
+  readonly generator: TerrainGenerator;
+  private readonly spawn: SpawnPoint;
   private readonly loop: GameLoop;
   private readonly unsubscribers: Array<() => void> = [];
 
@@ -53,7 +60,9 @@ export class Game {
 
     this.world = new World();
     this.world.events.on('chunkDirty', ({ key }) => this.dirtyChunks.add(key));
-    buildShowcaseWorld(this.world);
+    this.generator = new TerrainGenerator(DEFAULT_WORLD_CONFIG);
+    this.spawn = this.generator.findSpawn();
+    this.generateAround(this.spawn);
 
     this.unsubscribers.push(
       this.renderer.onResize((width, height) => this.cameraRig.setAspect(width, height)),
@@ -97,11 +106,24 @@ export class Game {
     this.chunkMaterials.time.value = elapsed;
     this.remeshDirtyChunks();
 
-    // Slow orbit around the showcase area.
-    const angle = elapsed * 0.15;
+    // Slow orbit above the spawn point.
+    const angle = elapsed * 0.12;
+    const { x, y, z } = this.spawn;
     const camera = this.cameraRig.camera;
-    camera.position.set(Math.cos(angle) * 30, SHOWCASE_GROUND + 16, Math.sin(angle) * 30);
-    camera.lookAt(0, SHOWCASE_GROUND + 2, 0);
+    camera.position.set(x + Math.cos(angle) * 42, y + 26, z + Math.sin(angle) * 42);
+    camera.lookAt(x, y + 2, z);
+  }
+
+  private generateAround(center: SpawnPoint): void {
+    const ccx = Math.floor(center.x) >> 4;
+    const ccz = Math.floor(center.z) >> 4;
+    for (let dz = -PREVIEW_RADIUS; dz <= PREVIEW_RADIUS; dz++) {
+      for (let dx = -PREVIEW_RADIUS; dx <= PREVIEW_RADIUS; dx++) {
+        const cx = ccx + dx;
+        const cz = ccz + dz;
+        this.world.addChunk(new Chunk(cx, cz, this.generator.generateChunk(cx, cz)));
+      }
+    }
   }
 
   private remeshDirtyChunks(): void {
