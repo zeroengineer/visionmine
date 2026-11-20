@@ -4,7 +4,7 @@ import type { InputManager } from '@/core/input/InputManager';
 import { QUALITY_PROFILES } from '@/core/renderer/quality';
 import type { Renderer } from '@/core/renderer/Renderer';
 import { BlockInteraction, type InteractionRules } from '@/gameplay/interaction/BlockInteraction';
-import { selectedStack, starterInventory } from '@/gameplay/inventory/inventory';
+import { sanitizeInventory, selectedStack, starterInventory } from '@/gameplay/inventory/inventory';
 import { GAME_MODES } from '@/gameplay/modes/gameMode';
 import { PlayerController } from '@/gameplay/movement/PlayerController';
 import { Player, PLAYER_EYE_HEIGHT } from '@/gameplay/player/Player';
@@ -26,6 +26,7 @@ import { ChunkGeneratorPool } from '@/world/generation/ChunkGeneratorPool';
 import type { WorldConfig } from '@/world/generation/config';
 import { TerrainGenerator, type SpawnPoint } from '@/world/generation/TerrainGenerator';
 import { FaceMesher } from '@/world/meshing/FaceMesher';
+import type { PlayerRecord, WorldEdits } from '@/world/persistence/types';
 import { World } from '@/world/World';
 
 /** Long-lived engine objects shared by every world session. */
@@ -37,6 +38,12 @@ export interface EngineContext {
   atlas: TileAtlas;
   chunkMaterials: ChunkMaterials;
   environment: Environment;
+}
+
+/** Saved state to restore when a session starts. Omitted fields mean "new world". */
+export interface SessionInit {
+  edits?: WorldEdits;
+  player?: PlayerRecord | null;
 }
 
 /**
@@ -59,6 +66,7 @@ export class WorldSession {
   private readonly pool: ChunkGeneratorPool;
   /** False until the terrain under the player has streamed in. */
   private playerReady = false;
+  private readonly restoredPlayer: boolean;
   private fovKick = 0;
   private readonly unsubscribers: Array<() => void> = [];
   /** Position that chunk streaming is centred on. */
@@ -68,12 +76,16 @@ export class WorldSession {
   constructor(
     protected readonly engine: EngineContext,
     readonly config: WorldConfig,
+    init: SessionInit = {},
   ) {
     const settings = settingsStore.getState();
     this.generator = new TerrainGenerator(config);
     this.spawn = this.generator.findSpawn();
-    this.focus.x = this.spawn.x;
-    this.focus.z = this.spawn.z;
+    if (init.edits) this.world.loadEdits(init.edits);
+    const saved = init.player ?? null;
+    this.restoredPlayer = saved !== null;
+    this.focus.x = saved?.x ?? this.spawn.x;
+    this.focus.z = saved?.z ?? this.spawn.z;
 
     this.chunkRenderer = new ChunkRenderer(engine.scene, engine.chunkMaterials);
     this.meshScheduler = new ChunkMeshScheduler(this.world, this.chunkRenderer, new FaceMesher());
@@ -83,7 +95,13 @@ export class WorldSession {
     this.chunkManager = new ChunkManager(this.world, this.pool, settings.renderDistance);
     this.applyViewDistance(settings.renderDistance);
 
-    this.player.teleport(this.spawn.x, this.spawn.y, this.spawn.z);
+    if (saved) {
+      this.player.teleport(saved.x, saved.y, saved.z);
+      this.player.yaw = saved.yaw;
+      this.player.pitch = saved.pitch;
+    } else {
+      this.player.teleport(this.spawn.x, this.spawn.y, this.spawn.z);
+    }
     this.controller = new PlayerController(this.player, this.world, engine.input);
     this.controller.sensitivity = settings.sensitivity;
     this.controller.invertY = settings.invertY;
@@ -100,8 +118,15 @@ export class WorldSession {
       this.createInteractionRules(),
     );
 
-    inventoryStore.getState().load(starterInventory(sessionStore.getState().mode));
+    inventoryStore
+      .getState()
+      .load(
+        saved?.inventory
+          ? sanitizeInventory(saved.inventory)
+          : starterInventory(sessionStore.getState().mode),
+      );
     this.applyGameMode();
+    if (saved?.flying) this.controller.setFlying(true);
 
     this.unsubscribers.push(
       this.interaction.events.on('broken', ({ x, y, z, block }) => {
@@ -144,8 +169,15 @@ export class WorldSession {
 
   fixedUpdate(step: number): void {
     if (!this.playerReady) {
-      // Wait for the spawn column, then drop the player onto the surface.
-      this.playerReady = this.controller.placeOnGround();
+      // Wait for the player's column to stream in. New players are dropped onto the
+      // surface; restored players keep their position unless terrain now overlaps them.
+      if (!this.world.isLoadedAt(this.player.position.x, this.player.position.z)) return;
+      if (this.restoredPlayer) {
+        this.controller.freeFromBlocks();
+        this.playerReady = true;
+      } else {
+        this.playerReady = this.controller.placeOnGround();
+      }
       return;
     }
     this.controller.step(step);
@@ -165,6 +197,21 @@ export class WorldSession {
     const kickTarget = this.player.sprinting ? (this.player.flying ? 10 : 7) : 0;
     this.fovKick = lerp(this.fovKick, kickTarget, damp(8, dt));
     this.engine.cameraRig.setFovOffset(this.fovKick);
+  }
+
+  /** Snapshot of the player for saving. */
+  capturePlayer(worldId: string): PlayerRecord {
+    const { position, yaw, pitch, flying } = this.player;
+    return {
+      worldId,
+      x: position.x,
+      y: position.y,
+      z: position.z,
+      yaw,
+      pitch,
+      flying,
+      inventory: inventoryStore.getState().snapshot(),
+    };
   }
 
   /** Positions the camera for this frame; `alpha` blends the last two simulation steps. */
