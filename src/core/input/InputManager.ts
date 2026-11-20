@@ -1,4 +1,4 @@
-import { Emitter } from '@/core/engine/Emitter';
+import { Emitter } from '@/utils/Emitter';
 
 export interface InputEvents {
   keydown: { code: string };
