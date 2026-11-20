@@ -1,6 +1,7 @@
 import './styles/base.css';
 import './styles/hud.css';
 import './styles/menus.css';
+import { installDebugHook, shouldInstallDebugHook } from '@/game/debugHook';
 import { Game } from '@/game/Game';
 import { mountUi } from '@/ui/App';
 
@@ -35,6 +36,7 @@ function boot(): void {
   }
 
   mountUi(ui, game, game.atlas);
+  if (shouldInstallDebugHook()) installDebugHook(game);
   game.start();
   game.boot().catch((error: unknown) => {
     console.error('VISIONMINE: boot failed.', error);

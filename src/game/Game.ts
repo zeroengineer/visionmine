@@ -3,6 +3,7 @@ import { Sfx } from '@/core/audio/Sfx';
 import { CameraRig } from '@/core/camera/CameraRig';
 import { GameLoop } from '@/core/engine/GameLoop';
 import { InputManager } from '@/core/input/InputManager';
+import { AdaptiveResolution } from '@/core/renderer/AdaptiveResolution';
 import { QUALITY_PROFILES } from '@/core/renderer/quality';
 import { Renderer } from '@/core/renderer/Renderer';
 import { createScene } from '@/core/scene/createScene';
@@ -69,6 +70,7 @@ export class Game implements GameCommands {
   private expectingUnlock = false;
   /** Guards against overlapping world transitions. */
   private busy = false;
+  private readonly adaptive: AdaptiveResolution;
   private frameMs = 16.7;
   private pausedAt = 0;
 
@@ -80,6 +82,7 @@ export class Game implements GameCommands {
       antialias: profile.antialias,
       maxPixelRatio: profile.maxPixelRatio,
     });
+    this.adaptive = new AdaptiveResolution(this.renderer);
     this.scene = createScene();
     this.cameraRig = new CameraRig(settings.fov);
     this.input = new InputManager(canvas);
@@ -113,7 +116,8 @@ export class Game implements GameCommands {
         (fov) => this.cameraRig.setFov(fov),
       ),
       settingsStore.subscribe(
-        (s) => `${s.quality}|${s.shadows}|${s.weather}|${s.dayLengthMinutes}|${s.volume}`,
+        (s) =>
+          `${s.quality}|${s.shadows}|${s.weather}|${s.dayLengthMinutes}|${s.volume}|${s.adaptiveQuality}`,
         () => this.applySettings(),
       ),
     );
@@ -444,6 +448,8 @@ export class Game implements GameCommands {
     this.environment.weather.enabled = settings.weather;
     this.environment.cycle.dayLengthSeconds = settings.dayLengthMinutes * 60;
     this.sfx.volume = settings.volume;
+    this.adaptive.enabled = settings.adaptiveQuality;
+    this.adaptive.reset();
   }
 
   private update(dt: number, elapsed: number): void {
@@ -459,6 +465,8 @@ export class Game implements GameCommands {
       session.update(dt, elapsed);
       if (!frozen) this.saveManager?.update(dt);
       if (this.loading) this.updateLoading(session);
+      // Measure only steady gameplay; loading and menus have unrepresentative frame times.
+      if (screen === 'playing' && !session.attract) this.adaptive.update(dt);
     }
 
     const camera = this.cameraRig.camera;
@@ -480,6 +488,7 @@ export class Game implements GameCommands {
     this.loading = false;
     ui.setLoadProgress(1);
     ui.setScreen('playing');
+    this.adaptive.reset();
     if (!this.storagePersistent) {
       ui.notify('Browser storage is unavailable — this world will not be saved.', 'error');
     }

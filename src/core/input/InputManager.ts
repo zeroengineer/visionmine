@@ -39,6 +39,7 @@ export class InputManager {
   private lookY = 0;
   private wheelAccum = 0;
   private locked = false;
+  private lockOverride = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', this.onKeyDown);
@@ -75,6 +76,10 @@ export class InputManager {
   /** Requests pointer lock. Must be called from a user gesture. */
   requestLock(): void {
     if (this.locked) return;
+    if (this.lockOverride) {
+      this.onLockChange();
+      return;
+    }
     try {
       const result = this.canvas.requestPointerLock() as unknown;
       if (result instanceof Promise) result.catch(() => undefined);
@@ -85,6 +90,16 @@ export class InputManager {
 
   exitLock(): void {
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    else if (this.lockOverride) this.setLockOverride(false);
+  }
+
+  /**
+   * Treats input as captured without real pointer lock. For automated tests in
+   * browsers that cannot grant pointer lock; never used in normal play.
+   */
+  setLockOverride(locked: boolean): void {
+    this.lockOverride = locked;
+    this.onLockChange();
   }
 
   /** Drops all held keys and buttons (used when gameplay input is suspended). */
@@ -127,9 +142,11 @@ export class InputManager {
   private readonly onBlur = (): void => this.releaseAll();
 
   private readonly onLockChange = (): void => {
-    this.locked = document.pointerLockElement === this.canvas;
-    if (!this.locked) this.releaseAll();
-    this.events.emit('lockchange', { locked: this.locked });
+    const locked = this.lockOverride || document.pointerLockElement === this.canvas;
+    if (locked === this.locked) return;
+    this.locked = locked;
+    if (!locked) this.releaseAll();
+    this.events.emit('lockchange', { locked });
   };
 
   private readonly onMouseMove = (event: MouseEvent): void => {
