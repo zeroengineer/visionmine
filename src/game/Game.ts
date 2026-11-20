@@ -12,7 +12,11 @@ import { inventoryStore } from '@/state/inventoryStore';
 import { sessionStore } from '@/state/sessionStore';
 import { settingsStore } from '@/state/settingsStore';
 import { uiStore } from '@/state/uiStore';
-import { DEFAULT_WORLD_CONFIG, type WorldConfig } from '@/world/generation/config';
+import { DEFAULT_WORLD_CONFIG } from '@/world/generation/config';
+import { openRepository } from '@/world/persistence/openRepository';
+import type { PlayerRecord, WorldEdits, WorldRecord } from '@/world/persistence/types';
+import { SaveManager } from './SaveManager';
+import { WorldService } from './WorldService';
 import { WorldSession, type EngineContext } from './WorldSession';
 
 /**
@@ -28,6 +32,8 @@ export class Game {
   readonly atlas: TileAtlas;
   readonly chunkMaterials: ChunkMaterials;
   private session: WorldSession | null = null;
+  private saveManager: SaveManager | null = null;
+  private service: WorldService | null = null;
   private readonly loop: GameLoop;
   private readonly unsubscribers: Array<() => void> = [];
 
@@ -78,8 +84,30 @@ export class Game {
         this.renderer.render(this.scene, this.cameraRig.camera);
       },
     });
+  }
 
-    this.loadWorld(DEFAULT_WORLD_CONFIG);
+  /** World management API; available after `boot()` resolves. */
+  get worlds(): WorldService {
+    if (!this.service) throw new Error('Game.boot() has not completed.');
+    return this.service;
+  }
+
+  /** Opens storage and enters the most recently played world, creating one if none exist. */
+  async boot(): Promise<void> {
+    this.service = new WorldService(await openRepository());
+    const summaries = await this.service.list().catch(() => []);
+    const latest = summaries.find((summary) => !summary.corrupt);
+    const record =
+      latest && !latest.corrupt
+        ? latest.record
+        : await this.service.create({
+            name: 'My World',
+            seed: DEFAULT_WORLD_CONFIG.seed,
+            terrain: DEFAULT_WORLD_CONFIG.terrain,
+            treeDensity: DEFAULT_WORLD_CONFIG.treeDensity,
+            mode: 'creative',
+          });
+    await this.enterWorld(record);
   }
 
   get engine(): EngineContext {
@@ -98,11 +126,49 @@ export class Game {
     return this.session;
   }
 
-  /** Replaces the current world with a newly generated one. */
-  loadWorld(config: WorldConfig): WorldSession {
+  /** Loads a saved world and makes it the active session. */
+  async enterWorld(record: WorldRecord): Promise<WorldSession> {
+    await this.leaveWorld();
+    const repository = this.worlds.repository;
+
+    // A world must still open if its edits or player data cannot be read.
+    let edits: WorldEdits = new Map();
+    let player: PlayerRecord | null = null;
+    try {
+      [edits, player] = await Promise.all([
+        repository.loadEdits(record.id),
+        repository.loadPlayer(record.id),
+      ]);
+    } catch (error) {
+      console.error('VISIONMINE: saved data could not be read; starting from the seed.', error);
+    }
+
+    sessionStore.getState().setWorld({
+      id: record.id,
+      name: record.name,
+      seed: record.config.seed,
+      mode: record.mode,
+    });
+    this.environment.cycle.setTime(record.timeOfDay);
+    this.environment.weather.set('clear', true);
+
+    const session = new WorldSession(this.engine, record.config, { edits, player });
+    this.session = session;
+    this.saveManager = new SaveManager(repository, record, session, this.environment);
+    return session;
+  }
+
+  /** Saves and unloads the active world, if any. */
+  async leaveWorld(): Promise<void> {
+    const saveManager = this.saveManager;
+    if (saveManager) {
+      await saveManager.save();
+      saveManager.dispose();
+    }
+    this.saveManager = null;
     this.session?.dispose();
-    this.session = new WorldSession(this.engine, config);
-    return this.session;
+    this.session = null;
+    sessionStore.getState().setWorld(null);
   }
 
   openInventory(): void {
@@ -125,6 +191,8 @@ export class Game {
   dispose(): void {
     this.loop.dispose();
     for (const unsubscribe of this.unsubscribers) unsubscribe();
+    this.saveManager?.dispose();
+    this.saveManager = null;
     this.session?.dispose();
     this.session = null;
     this.chunkMaterials.dispose();
@@ -157,6 +225,7 @@ export class Game {
   private update(dt: number, elapsed: number): void {
     this.chunkMaterials.time.value = elapsed;
     this.session?.update(dt, elapsed);
+    this.saveManager?.update(dt);
 
     const camera = this.cameraRig.camera;
     const focus = this.session?.player.position ?? camera.position;

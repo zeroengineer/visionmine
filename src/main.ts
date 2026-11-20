@@ -27,6 +27,7 @@ function boot(): void {
   try {
     const game = new Game(canvas);
     game.start();
+    void game.boot().catch((error: unknown) => console.error('VISIONMINE: boot failed.', error));
     initBlockIcons(game.atlas);
     ui.append(
       createUnderwaterOverlay().el,
