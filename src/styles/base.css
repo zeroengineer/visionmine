@@ -46,3 +46,29 @@ body {
 #ui > * {
   pointer-events: auto;
 }
+
+.fatal-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 32px;
+  text-align: center;
+  background: var(--bg);
+}
+
+.fatal-error h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
+.fatal-error p {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--muted);
+  line-height: 1.5;
+}
