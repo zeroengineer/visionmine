@@ -27,6 +27,16 @@ npm run dev
 
 Playwright needs its browsers once: `npx playwright install`.
 
+Useful variations:
+
+```bash
+npx playwright test --project=chromium        # one browser
+npx playwright test blocks                    # one spec file
+npx playwright test --project=chromium performance   # resource measurements → test-results/performance.json
+```
+
+The browser tests run against the production build served by `vite preview` on port 4173. Playwright starts it (building first) if nothing is listening there; if a preview server is already running it is reused, so rebuild after changing game code.
+
 ## Toolchain notes
 
 - TypeScript is pinned to 6.0.x because `typescript-eslint` 8 does not yet accept TypeScript 7.
@@ -45,7 +55,7 @@ Playwright needs its browsers once: `npx playwright install`.
 ## Debugging aids
 
 - **F3** shows frame time, position, chunk counts, draw calls, triangles and GPU resource counts.
-- In development builds, or on any build opened with `?e2e` in the URL, `window.__visionmine` exposes a small inspection API (`player()`, `getBlock()`, `target()`, `look()`, `teleport()`, `inventory()`, `stats()`, `save()`, `virtualLock()`); see `src/game/debugHook.ts`. Browser tests use it to assert on world state.
+- In development builds, or on any build opened with `?e2e` in the URL, `window.__visionmine` exposes a small inspection API (`player()`, `getBlock()`, `target()`, `look()`, `teleport()`, `inventory()`, `stats()`, `save()`, `setTime()`, `setWeather()`, `virtualLock()`); see `src/game/debugHook.ts`. Browser tests use it to assert on world state.
 
 ## Adding things
 
@@ -62,6 +72,75 @@ Playwright needs its browsers once: `npx playwright install`.
 - UI updates are driven by store subscriptions with selectors, not by the render loop.
 - Data read from storage is untrusted: validate it before use.
 
-## Testing policy
+## Testing
 
-Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Unit tests, browser tests and gameplay QA are written and executed in the final validation phase; results are recorded below.
+Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Unit tests, browser tests and gameplay QA were written and executed in the final validation phase.
+
+### What is covered
+
+- **Unit tests** (`tests/unit`, Vitest, Node) — coordinates, terrain determinism and chunk borders, world edits and dirty propagation, face meshing, collision, raycasting, block interaction, player movement, explosions, inventory, settings, persistence (in-memory and IndexedDB through `fake-indexeddb`, including corrupt data) and chunk streaming.
+- **Browser tests** (`tests/e2e`, Playwright, production build) — drive the real UI with clicks and keys and assert on world state through `window.__visionmine`:
+
+| Spec                     | Covers                                                                                                                                    |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `flow.spec.ts`           | Boot to menu, rendered backdrop, create world → loading → playing, seed determinism, cancelling the form, no console errors               |
+| `movement.spec.ts`       | Walking and stopping, jumping, gravity, flight, wall collision, mouse look                                                                |
+| `blocks.spec.ts`         | Break, place, every hotbar block, placement refused inside the player, pick block, TNT, survival consumption and timed mining             |
+| `inventory.spec.ts`      | Number keys and wheel, opening and closing, creative palette, moving, swapping and splitting stacks, backpack expansion, survival view    |
+| `pause-settings.spec.ts` | Pause freezes simulation and clock, resume, Save Now, mode switch, Save & Quit and Continue, settings applied and persisted, defaults, F3 |
+| `persistence.spec.ts`    | Edits, player, view, flight and inventory restored after reload; save on leaving; survival state; Reset World; New Terrain                |
+| `worlds.spec.ts`         | Empty list, ordering, play, rename (and cancel), delete with confirmation, damaged save listed and deletable                              |
+| `performance.spec.ts`    | Chunk, geometry and texture counts while travelling 576 blocks, on returning, and after leaving and re-entering the world (Chromium only) |
+
+Tests use real pointer lock where the browser grants it to automation (Chromium, Firefox) and the debug hook's `virtualLock()` otherwise (WebKit).
+
+### Results (2026-11-20, macOS, Apple M4)
+
+| Check                                   | Result                                                     |
+| --------------------------------------- | ---------------------------------------------------------- |
+| `npm run typecheck`, `npm run lint`     | clean                                                      |
+| `npm run format:check`                  | clean                                                      |
+| `npm test`                              | 107 / 107 passed                                           |
+| `npm run build`                         | succeeds — 655 kB JS (173 kB gzip), 14 kB CSS, 8 kB worker |
+| Playwright, Chromium 1255 (SwiftShader) | 41 / 41 passed                                             |
+| Playwright, Firefox 1572                | 40 / 40 passed, 1 skipped (performance spec)               |
+| Playwright, WebKit 2388                 | 39 / 39 passed, 2 skipped (performance spec, mouse look)   |
+
+The WebKit mouse-look test is skipped because Playwright's WebKit does not grant pointer lock; the same code path passes in Chromium and Firefox.
+
+### Defects found by browser testing and fixed
+
+- **One simulated frame ran after pausing.** The fixed-step simulation runs before the per-frame update that applied the paused flag, so a falling player moved a little further after Escape. The pause state is now applied before each simulation step (`Game.syncFrozen`).
+- **View could jerk when the mouse was captured.** Firefox reports a stale movement delta on the first mouse event after pointer lock is granted. `InputManager` now discards the first movement sample after each capture.
+
+Everything else — the chunk shader, atlas orientation, face winding, sky, shadows, water, weather, worker generation, pointer lock flow, UI screens and IndexedDB saves — worked on first contact with a browser. The first browser-test run also had failures that were wrong expectations in the tests themselves; those were corrected in the tests.
+
+### Performance and memory
+
+Frame rate on the real GPU (headless Chromium with ANGLE/Metal on an Apple M4, 1920 × 1080, automatically selected High preset: render distance 8, 2048 px shadow map):
+
+| Situation                            | Average | 99th percentile frame | Draw calls | Triangles |
+| ------------------------------------ | ------- | --------------------- | ---------- | --------- |
+| Standing, 225 chunks meshed          | 60 fps  | 16.8 ms               | 255        | 219 k     |
+| Sprint-flying while chunks stream in | 60 fps  | 16.8 ms               | 253        | 168 k     |
+| Settled after the flight, 304 meshed | 60 fps  | 16.8 ms               | 174        | 107 k     |
+
+60 fps is the display refresh cap, so these show headroom rather than a maximum. Loading a new world to the first playable frame took about 1.5 s. Under SwiftShader (software rendering, as used by the Chromium test project) the game runs at 11–15 fps at 1280 × 720; that figure says nothing about real hardware and is why the tests poll for outcomes instead of assuming timings.
+
+Resource counts from `performance.spec.ts` (render distance 3, identical in three consecutive runs):
+
+| Point                     | Chunks loaded | Chunks meshed | Faces  | GPU geometries | Textures |
+| ------------------------- | ------------- | ------------- | ------ | -------------- | -------- |
+| Spawn                     | 81            | 37            | 25,270 | 22             | 1        |
+| Travelled 96 … 576 blocks | 99            | 57            | ~23 k  | 25–34          | 1        |
+| Back at spawn             | 81            | 37            | 25,270 | 21             | 1        |
+| Left and re-entered world | 81            | 37            | 25,270 | 21             | 1        |
+
+Counts plateau while travelling and return exactly to the starting footprint, so chunk unloading and `WorldSession.dispose()` release what they allocate. The JS heap moved between 13 and 38 MB across the run with no upward trend after garbage collection.
+
+### Known limitations
+
+- Chunks stay loaded and meshed until they are `renderDistance + 4` chunks away (hysteresis against thrashing), so more chunks are meshed after travelling than at spawn — 57 instead of 37 at render distance 3. They are still frustum-culled. Lowering the render distance therefore frees memory only for chunks beyond the new distance + 4.
+- The "queued" figure in the F3 overlay counts every loaded chunk that has no mesh, including the outer ring that is loaded only to give its neighbours correct borders. It does not fall to zero when streaming is finished.
+- When frames take longer than about 83 ms the simulation runs slower than real time (at most five 1/60 s steps per frame) instead of trying to catch up.
+- Firefox and WebKit were tested through Playwright's builds on macOS only. Safari, mobile browsers and touch input were not tested; the game requires a keyboard and mouse.
