@@ -127,6 +127,7 @@
 .overlay {
   position: absolute;
   inset: 0;
+  pointer-events: auto;
   display: grid;
   place-items: center;
   padding: 24px;

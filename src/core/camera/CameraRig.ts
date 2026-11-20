@@ -41,6 +41,27 @@ export class CameraRig {
     this.camera.rotation.set(pitch, yaw, 0);
   }
 
+  /**
+   * Places the camera `distance` blocks behind an eye position, looking along the
+   * same view direction.
+   */
+  setThirdPerson(
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    pitch: number,
+    distance: number,
+  ): void {
+    const cosPitch = Math.cos(pitch);
+    this.camera.position.set(
+      x + Math.sin(yaw) * cosPitch * distance,
+      y - Math.sin(pitch) * distance,
+      z + Math.cos(yaw) * cosPitch * distance,
+    );
+    this.camera.rotation.set(pitch, yaw, 0);
+  }
+
   private applyFov(): void {
     this.camera.fov = this.baseFov + this.fovOffset;
     this.camera.updateProjectionMatrix();

@@ -1,0 +1,65 @@
+import { GAME_MODES } from '@/gameplay/modes/gameMode';
+import { sessionStore } from '@/state/sessionStore';
+import { isInGame, uiStore } from '@/state/uiStore';
+import { h, type View } from '../components/dom';
+import type { GameCommands } from '../GameCommands';
+import { createCrosshair } from './Crosshair';
+import { createDebugOverlay } from './DebugOverlay';
+import { createHotbar } from './Hotbar';
+import { createUnderwaterOverlay } from './UnderwaterOverlay';
+
+/** In-game heads-up display: everything drawn over the world while playing. */
+export function createHud(commands: GameCommands): View {
+  const underwater = createUnderwaterOverlay();
+  const hotbar = createHotbar();
+  const debug = createDebugOverlay(commands);
+  const crosshair = createCrosshair();
+  const modeBadge = h('div', { class: 'hud__mode' });
+  const hint = h(
+    'div',
+    { class: 'hud__hint', attrs: { 'data-testid': 'click-to-play' } },
+    h('strong', { text: 'Click to play' }),
+    h('span', { text: 'Esc releases the mouse' }),
+  );
+
+  const el = h(
+    'div',
+    { class: 'hud', attrs: { 'data-testid': 'hud' } },
+    underwater.el,
+    crosshair,
+    modeBadge,
+    debug.el,
+    hotbar.el,
+    hint,
+  );
+
+  const refresh = (): void => {
+    const { screen, pointerLocked } = uiStore.getState();
+    el.hidden = !isInGame(screen);
+    const waiting = screen === 'playing' && !pointerLocked;
+    hint.hidden = !waiting;
+    crosshair.style.visibility = screen === 'playing' && pointerLocked ? 'visible' : 'hidden';
+  };
+
+  const unsubscribers = [
+    uiStore.subscribe((s) => s.screen, refresh),
+    uiStore.subscribe((s) => s.pointerLocked, refresh),
+    sessionStore.subscribe(
+      (s) => s.mode,
+      (mode) => (modeBadge.textContent = GAME_MODES[mode].label),
+      { fireImmediately: true },
+    ),
+  ];
+  refresh();
+
+  return {
+    el,
+    dispose() {
+      for (const unsubscribe of unsubscribers) unsubscribe();
+      underwater.dispose();
+      hotbar.dispose();
+      debug.dispose();
+      el.remove();
+    },
+  };
+}
