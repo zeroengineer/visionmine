@@ -37,3 +37,29 @@ core ◄── gameplay, rendering
 - **Explicit disposal.** Every geometry, material and texture has an owner that disposes it.
 
 Each section below is filled in as the corresponding phase lands.
+
+## Voxel data and chunk pipeline
+
+```
+ChunkManager ──request──► ChunkGeneratorPool ──► Web Workers (TerrainGenerator)
+     ▲                                                   │ Uint8Array (transferred)
+     │ focus position                                    ▼
+WorldSession                                    World.addChunk ──► event: chunkDirty
+                                                                        │
+                              ChunkMeshScheduler ◄──────────────────────┘
+                                   │  FaceMesher (ChunkMesher interface)
+                                   ▼
+                              ChunkRenderer ──► InstancedMesh (opaque) + InstancedMesh (water)
+```
+
+- **Chunk** — a `Uint8Array` of 16 × 128 × 16 block ids (`x + z*16 + y*256`). No rendering state.
+- **World** — map of loaded chunks plus the player's edits (`chunkKey → index → blockId`). Edits live outside chunks so they survive unloading and are the only data that is saved.
+- **TerrainGenerator** — pure function of `(config, x, z)`. Height comes from layered simplex noise (continents, erosion, ridges, hills, detail); temperature and moisture choose the biome surface. Trees come from a jittered grid hashed from the seed and are evaluated with a two-block margin, so a canopy crossing a chunk border is produced identically by both chunks.
+- **ChunkManager** — keeps chunks loaded within `renderDistance + 2`, requests them nearest-first only when a worker is free, and unloads beyond `renderDistance + 4`.
+- **ChunkMeshScheduler** — remeshes player edits immediately; streams new chunks under a 4 ms/frame budget and only when all eight neighbours exist, so border faces and ambient occlusion are exact.
+- **FaceMesher** — emits one quad per block face that touches a non-opaque block, with per-corner ambient occlusion. Output is a flat `FaceBatch` (`x, y, z, face, tile, ao×4, width, height`).
+- **ChunkRenderer** — writes each batch into an `InstancedMesh` whose base geometry is a single unit quad. The instance matrix encodes position, orientation and size; instanced attributes carry the atlas tile and ambient occlusion. Draw calls are at most two per visible chunk.
+
+### Introducing greedy meshing
+
+`ChunkMesher` is the only seam involved. A greedy mesher implements the same interface and emits fewer faces with `width`/`height` greater than one; the instance matrix already scales the quad and the shader already tiles the texture by the quad size (`vFaceUv = uv * size`). Nothing in `World`, `ChunkManager` or `ChunkRenderer` changes.
