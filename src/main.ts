@@ -4,6 +4,7 @@ import { Game } from '@/game/Game';
 import { initBlockIcons } from '@/ui/components/blockIcon';
 import { createCrosshair } from '@/ui/hud/Crosshair';
 import { createHotbar } from '@/ui/hud/Hotbar';
+import { createUnderwaterOverlay } from '@/ui/hud/UnderwaterOverlay';
 import { createInventoryScreen } from '@/ui/inventory/InventoryScreen';
 
 function showFatalError(root: HTMLElement, message: string): void {
@@ -28,6 +29,7 @@ function boot(): void {
     game.start();
     initBlockIcons(game.atlas);
     ui.append(
+      createUnderwaterOverlay().el,
       createCrosshair(),
       createHotbar().el,
       createInventoryScreen({ onClose: () => game.closeInventory() }).el,

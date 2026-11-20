@@ -51,7 +51,6 @@ export interface ChunkRenderStats {
 export class ChunkRenderer {
   readonly root = new THREE.Group();
   private readonly entries = new Map<number, ChunkEntry>();
-  private shadows = false;
   private faceTotal = 0;
 
   constructor(
@@ -84,18 +83,6 @@ export class ChunkRenderer {
 
   has(key: number): boolean {
     return this.entries.has(key);
-  }
-
-  setShadows(enabled: boolean): void {
-    if (this.shadows === enabled) return;
-    this.shadows = enabled;
-    for (const entry of this.entries.values()) {
-      if (entry.opaque) {
-        entry.opaque.mesh.castShadow = enabled;
-        entry.opaque.mesh.receiveShadow = enabled;
-      }
-      if (entry.translucent) entry.translucent.mesh.receiveShadow = enabled;
-    }
   }
 
   stats(): ChunkRenderStats {
@@ -161,8 +148,9 @@ export class ChunkRenderer {
     mesh.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
-    mesh.castShadow = this.shadows && !translucent;
-    mesh.receiveShadow = this.shadows;
+    // Shadow cost is controlled by the light; with no shadow-casting light these are free.
+    mesh.castShadow = !translucent;
+    mesh.receiveShadow = true;
     // Water draws after opaque terrain.
     mesh.renderOrder = translucent ? 1 : 0;
     this.root.add(mesh);

@@ -34,7 +34,8 @@ export class Renderer {
     this.maxPixelRatio = options.maxPixelRatio;
     this.webgl.toneMapping = THREE.NoToneMapping;
     this.webgl.shadowMap.type = THREE.PCFShadowMap;
-    this.webgl.shadowMap.enabled = false;
+    // Shadows are switched per light (Lighting.setShadowMapSize), not on the renderer.
+    this.webgl.shadowMap.enabled = true;
     this.webgl.info.autoReset = true;
     window.addEventListener('resize', this.resize);
     this.resize();
@@ -72,12 +73,6 @@ export class Renderer {
 
   getResolutionScale(): number {
     return this.resolutionScale;
-  }
-
-  setShadowsEnabled(enabled: boolean): void {
-    if (this.webgl.shadowMap.enabled === enabled) return;
-    this.webgl.shadowMap.enabled = enabled;
-    this.webgl.shadowMap.needsUpdate = true;
   }
 
   render(scene: THREE.Scene, camera: THREE.Camera): void {
