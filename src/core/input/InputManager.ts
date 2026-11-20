@@ -40,6 +40,8 @@ export class InputManager {
   private wheelAccum = 0;
   private locked = false;
   private lockOverride = false;
+  /** The next movement sample is the first one since the mouse was captured. */
+  private skipNextMove = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', this.onKeyDown);
@@ -145,12 +147,19 @@ export class InputManager {
     const locked = this.lockOverride || document.pointerLockElement === this.canvas;
     if (locked === this.locked) return;
     this.locked = locked;
+    // Browsers may report a stale delta (measured from the pre-capture cursor
+    // position) on the first movement after capture, which would jerk the view.
+    this.skipNextMove = locked;
     if (!locked) this.releaseAll();
     this.events.emit('lockchange', { locked });
   };
 
   private readonly onMouseMove = (event: MouseEvent): void => {
     if (!this.locked) return;
+    if (this.skipNextMove) {
+      this.skipNextMove = false;
+      return;
+    }
     const dx = event.movementX || 0;
     const dy = event.movementY || 0;
     // Some browsers occasionally report a huge spurious delta; drop those samples.
