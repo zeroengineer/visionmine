@@ -66,6 +66,8 @@ export interface BlockDef {
   readonly light: number;
   /** Can be climbed like a ladder. */
   readonly climbable: boolean;
+  /** Drops when nothing is underneath (sand, gravel). */
+  readonly falls: boolean;
   /** Breaks when the block underneath is removed (plants, torches). */
   readonly needsSupport: boolean;
   /** Block the player receives for this one, when it is not itself (a door's upper half). */
@@ -103,6 +105,7 @@ function def(
     placeable: true,
     light: 0,
     climbable: false,
+    falls: false,
     needsSupport: false,
     item: id,
     ...overrides,
@@ -131,7 +134,7 @@ export const BLOCKS: readonly BlockDef[] = [
   ),
   def(BlockId.Dirt, 'dirt', 'Dirt', Tile.Dirt, 0x8a5a36, 0.5),
   def(BlockId.Stone, 'stone', 'Stone', Tile.Stone, 0x8b8f94, 1.5),
-  def(BlockId.Sand, 'sand', 'Sand', Tile.Sand, 0xe2d39a, 0.5),
+  def(BlockId.Sand, 'sand', 'Sand', Tile.Sand, 0xe2d39a, 0.5, { falls: true }),
   def(BlockId.Water, 'water', 'Water', Tile.Water, 0x3f7fd6, 0, {
     solid: false,
     opaque: false,
@@ -153,7 +156,7 @@ export const BLOCKS: readonly BlockDef[] = [
   def(BlockId.Glass, 'glass', 'Glass', Tile.Glass, 0xcfeaf5, 0.3, { opaque: false }),
   def(BlockId.Brick, 'brick', 'Bricks', Tile.Brick, 0xa5503f, 1.8),
   def(BlockId.Snow, 'snow', 'Snow', Tile.Snow, 0xf2f6fa, 0.4),
-  def(BlockId.Gravel, 'gravel', 'Gravel', Tile.Gravel, 0x8a8683, 0.6),
+  def(BlockId.Gravel, 'gravel', 'Gravel', Tile.Gravel, 0x8a8683, 0.6, { falls: true }),
   def(
     BlockId.Tnt,
     'tnt',

@@ -25,6 +25,8 @@ const PAD = CHUNK_SIZE + 2;
 const PAD_AREA = PAD * PAD;
 /** Water surfaces sit slightly below the block top so shorelines read clearly. */
 const WATER_SURFACE_DROP = 0.12;
+/** Extra drop of the surface per level of flowing water (level 7 is a thin film). */
+const WATER_LEVEL_DROP = 0.11;
 const AO_LEVELS = [0.45, 0.65, 0.82, 1] as const;
 
 /** The six axis-aligned faces. */
@@ -177,8 +179,17 @@ export class FaceMesher implements ChunkMesher {
             const n = FACE_AXES[face]!.n;
             const faceLight = lit ? light.at(x + n[0], y + n[1], z + n[2]) / MAX_LIGHT : 0;
             if (liquid) {
-              const drop = face === 2 ? WATER_SURFACE_DROP : 0;
-              translucent.push(x, y - drop, z, face, tile, 1, 1, 1, 1, 1, 1, faceLight);
+              // Flowing water is shallower the further it is from its source.
+              // Sides are shortened from the top; the surface is lowered to match.
+              const level = chunk.getMeta(x + z * CHUNK_SIZE + y * 256);
+              const drop = WATER_SURFACE_DROP + Math.min(level, 7) * WATER_LEVEL_DROP;
+              if (face === 2) {
+                translucent.push(x, y - drop, z, face, tile, 1, 1, 1, 1, 1, 1, faceLight);
+              } else if (face === 3) {
+                translucent.push(x, y, z, face, tile, 1, 1, 1, 1, 1, 1, faceLight);
+              } else {
+                translucent.push(x, y, z, face, tile, 1, 1, 1, 1, 1, 1 - drop, faceLight);
+              }
             } else {
               const u = U_OFFSET[face]!;
               const v = V_OFFSET[face]!;
