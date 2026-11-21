@@ -161,9 +161,8 @@ describe('fall distance', () => {
     const { controller, run, player } = setup(12);
     run(3);
     expect(player.onGround).toBe(true);
-    const landing = controller.consumeLanding();
-    expect(landing).toBeGreaterThan(11.8);
-    expect(landing).toBeLessThanOrEqual(12);
+    // The whole drop, including the step in which the player touches down.
+    expect(controller.consumeLanding()).toBeCloseTo(12, 6);
     expect(controller.consumeLanding()).toBe(0);
     run(1);
     expect(controller.consumeLanding()).toBe(0);

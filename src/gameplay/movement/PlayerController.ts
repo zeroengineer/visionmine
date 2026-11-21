@@ -350,11 +350,13 @@ export class PlayerController {
     // Track how far the player has dropped, to judge the landing.
     if (player.flying || player.inWater || player.climbing) {
       this.fallDistance = 0;
-    } else if (this.result.onGround) {
-      if (this.fallDistance > 0) this.landing = this.fallDistance;
-      this.fallDistance = 0;
-    } else if (position.y < previous.y) {
-      this.fallDistance += previous.y - position.y;
+    } else {
+      // Count this step's drop first: the step that lands is part of the fall.
+      if (position.y < previous.y) this.fallDistance += previous.y - position.y;
+      if (this.result.onGround) {
+        if (this.fallDistance > 0) this.landing = this.fallDistance;
+        this.fallDistance = 0;
+      }
     }
     // The body moves up at once; the camera catches up smoothly.
     if (rise > 0) player.viewOffsetY -= rise;
