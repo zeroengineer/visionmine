@@ -4,6 +4,14 @@ import { uiStore } from '@/state/uiStore';
 import { button, segmented, sliderField, toggleField } from '../components/controls';
 import { h, type View } from '../components/dom';
 import { bindScreen } from '../components/screen';
+import { createBindingsEditor } from './BindingsEditor';
+
+type Tab = 'graphics' | 'controls' | 'world';
+const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
+  { id: 'graphics', label: 'Graphics' },
+  { id: 'controls', label: 'Controls' },
+  { id: 'world', label: 'World & sound' },
+];
 
 export function createSettingsScreen(): View {
   const store = settingsStore;
@@ -70,8 +78,9 @@ export function createSettingsScreen(): View {
     'Debug overlay',
     s.showDebug,
     (showDebug) => set({ showDebug }),
-    'Also toggled with F3.',
+    'Also toggled with its key (F3 by default).',
   );
+  const bindings = createBindingsEditor();
 
   const sync = (): void => {
     const state = store.getState();
@@ -92,25 +101,73 @@ export function createSettingsScreen(): View {
   done.setAttribute('data-autofocus', '');
   const defaults = button('Restore defaults', () => store.getState().reset(), { variant: 'ghost' });
 
-  const section = (title: string, ...rows: HTMLElement[]): HTMLElement =>
-    h(
-      'section',
-      { class: 'settings__section' },
-      h('h3', { class: 'inv__heading', text: title }),
-      ...rows,
-    );
+  // One tab is shown at a time; each is a tabpanel labelled by its tab button.
+  const panels: Record<Tab, HTMLElement> = {
+    graphics: h(
+      'div',
+      { class: 'settings__panel' },
+      quality.row,
+      renderDistance.row,
+      shadows.row,
+      adaptive.row,
+      weather.row,
+    ),
+    controls: h(
+      'div',
+      { class: 'settings__panel' },
+      h('div', { class: 'settings__mouse' }, fov.row, sensitivity.row, invertY.row),
+      bindings.el,
+    ),
+    world: h('div', { class: 'settings__panel' }, dayLength.row, volume.row, debug.row),
+  };
+  const tabButtons = new Map<Tab, HTMLButtonElement>();
+  const selectTab = (tab: Tab): void => {
+    for (const { id } of TABS) {
+      const selected = id === tab;
+      panels[id].hidden = !selected;
+      const tabButton = tabButtons.get(id)!;
+      tabButton.classList.toggle('is-selected', selected);
+      tabButton.setAttribute('aria-selected', String(selected));
+      tabButton.tabIndex = selected ? 0 : -1;
+    }
+  };
+  const tabList = h('div', { class: 'tabs', attrs: { role: 'tablist', 'aria-label': 'Settings' } });
+  for (const { id, label } of TABS) {
+    const tabButton = h('button', {
+      class: 'tabs__tab',
+      text: label,
+      attrs: {
+        type: 'button',
+        role: 'tab',
+        id: `settings-tab-${id}`,
+        'aria-controls': `settings-panel-${id}`,
+      },
+      on: { click: () => selectTab(id) },
+    });
+    tabButtons.set(id, tabButton);
+    tabList.append(tabButton);
+    panels[id].id = `settings-panel-${id}`;
+    panels[id].setAttribute('role', 'tabpanel');
+    panels[id].setAttribute('aria-labelledby', tabButton.id);
+  }
+  tabList.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    const ids = TABS.map((tab) => tab.id);
+    const current = ids.findIndex((id) => tabButtons.get(id)!.classList.contains('is-selected'));
+    const next = ids[(current + (event.key === 'ArrowRight' ? 1 : -1) + ids.length) % ids.length]!;
+    selectTab(next);
+    tabButtons.get(next)!.focus();
+  });
+  selectTab('graphics');
 
   const panel = h(
     'div',
     { class: 'panel panel--wide settings', attrs: { role: 'dialog', 'aria-label': 'Settings' } },
     h('header', { class: 'panel__header' }, h('h2', { class: 'panel__title', text: 'Settings' })),
-    h(
-      'div',
-      { class: 'settings__grid' },
-      section('Graphics', quality.row, renderDistance.row, shadows.row, adaptive.row, weather.row),
-      section('Controls', fov.row, sensitivity.row, invertY.row),
-      section('World & sound', dayLength.row, volume.row, debug.row),
-    ),
+    tabList,
+    panels.graphics,
+    panels.controls,
+    panels.world,
     h('footer', { class: 'panel__footer' }, defaults, done),
   );
   const el = h(
@@ -124,6 +181,7 @@ export function createSettingsScreen(): View {
     el,
     dispose() {
       for (const unsubscribe of unsubscribers) unsubscribe();
+      bindings.dispose();
       el.remove();
     },
   };

@@ -180,10 +180,13 @@ export class WorldSession {
       this.tnt.events.on('exploded', (event) =>
         this.onExplosion(event.x, event.y, event.z, event.radius, event.result.removed),
       ),
+      input.events.on('action', ({ action }) => {
+        if (!input.isLocked || this.paused) return;
+        if (action === 'toggleFly') this.controller.toggleFlying();
+        else if (action === 'thirdPerson') this.toggleThirdPerson();
+      }),
       input.events.on('keydown', ({ code }) => {
         if (!input.isLocked || this.paused) return;
-        if (code === 'KeyF') this.controller.toggleFlying();
-        else if (code === 'KeyV') this.toggleThirdPerson();
         const digit = /^Digit([1-9])$/.exec(code);
         if (digit) inventoryStore.getState().select(Number(digit[1]) - 1);
       }),

@@ -92,15 +92,15 @@ export class BlockInteraction {
     private readonly input: InputManager,
     private readonly rules: InteractionRules,
   ) {
-    this.unsubscribe = input.events.on('mousedown', ({ button }) => {
+    this.unsubscribe = input.events.on('action', ({ action }) => {
       if (!input.isLocked) return;
-      if (button === 0) {
+      if (action === 'breakBlock') {
         this.breakCooldown = 0;
         this.tryInstantBreak();
-      } else if (button === 2) {
+      } else if (action === 'placeBlock') {
         this.placeCooldown = REPEAT_PLACE_INTERVAL;
         this.tryPlace();
-      } else if (button === 1 && this.hasTarget) {
+      } else if (action === 'pickBlock' && this.hasTarget) {
         this.rules.onPicked(this.hit.block);
       }
     });
@@ -119,7 +119,7 @@ export class BlockInteraction {
       return;
     }
 
-    if (input.isButtonDown(0) && this.hasTarget) {
+    if (input.isActionDown('breakBlock') && this.hasTarget) {
       if (this.rules.instantBreak()) {
         this.breakCooldown -= dt;
         if (this.breakCooldown <= 0) this.tryInstantBreak();
@@ -130,7 +130,7 @@ export class BlockInteraction {
       this.breakProgress = 0;
     }
 
-    if (input.isButtonDown(2)) {
+    if (input.isActionDown('placeBlock')) {
       this.placeCooldown -= dt;
       if (this.placeCooldown <= 0) {
         this.placeCooldown = REPEAT_PLACE_INTERVAL;

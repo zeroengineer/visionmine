@@ -143,16 +143,14 @@ export class PlayerController {
     const active = this.input.isLocked;
     const input = this.input;
     const forward = active
-      ? Number(input.isDown('KeyW') || input.isDown('ArrowUp')) -
-        Number(input.isDown('KeyS') || input.isDown('ArrowDown'))
+      ? Number(input.isActionDown('moveForward')) - Number(input.isActionDown('moveBack'))
       : 0;
     const strafe = active
-      ? Number(input.isDown('KeyD') || input.isDown('ArrowRight')) -
-        Number(input.isDown('KeyA') || input.isDown('ArrowLeft'))
+      ? Number(input.isActionDown('moveRight')) - Number(input.isActionDown('moveLeft'))
       : 0;
-    const jump = active && input.isDown('Space');
-    const descend = active && (input.isDown('KeyC') || input.isDown('ControlLeft'));
-    const sprintKey = active && (input.isDown('ShiftLeft') || input.isDown('ShiftRight'));
+    const jump = active && input.isActionDown('jump');
+    const descend = active && input.isActionDown('descend');
+    const sprintKey = active && input.isActionDown('sprint');
 
     // Double-tap jump toggles flying.
     if (jump && !this.jumpHeld) {
