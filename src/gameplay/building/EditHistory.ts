@@ -33,7 +33,8 @@ export class EditHistory {
 
   constructor(private readonly world: World) {
     this.unsubscribe = world.events.on('blockChanged', (event) => {
-      if (this.applying || !this.enabled) return;
+      // Sand that falls and water that flows are consequences, not edits.
+      if (this.applying || !this.enabled || event.simulated) return;
       const { x, y, z } = event;
       const key = `${x},${y},${z}`;
       const existing = this.pending.get(key);

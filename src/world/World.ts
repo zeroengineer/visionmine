@@ -14,6 +14,8 @@ export interface WorldEvents {
     next: number;
     previousMeta: number;
     nextMeta: number;
+    /** Made by the world's own rules (falling, flowing) rather than by the player. */
+    simulated: boolean;
   };
   /** A chunk's blocks changed and its mesh is stale. `urgent` = caused by a player edit. */
   chunkDirty: { key: number; urgent: boolean };
@@ -114,7 +116,7 @@ export class World {
    * Returns false when nothing changed (unloaded chunk, out of range, or the
    * same block in the same state).
    */
-  setBlock(x: number, y: number, z: number, id: number, meta = 0): boolean {
+  setBlock(x: number, y: number, z: number, id: number, meta = 0, simulated = false): boolean {
     if (!isValidY(y)) return false;
     const cx = x >> 4;
     const cz = z >> 4;
@@ -180,6 +182,7 @@ export class World {
       next: id,
       previousMeta,
       nextMeta: meta,
+      simulated,
     });
     return true;
   }

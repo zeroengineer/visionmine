@@ -67,6 +67,7 @@ These are the defaults. Every action except looking, the hotbar digits and `Esc`
 - Creative mode (unlimited blocks, instant breaking, flight) and Survival mode (mine to collect, timed breaking)
 - Hotbar and expandable inventory with stack splitting and a creative block palette
 - Creative builder tools: mark two corners to select a region, then fill, replace, clear, copy, rotate and paste it; undo and redo for every edit, including explosions
+- Sand and gravel fall when nothing holds them up; water flows downhill, spreads up to seven blocks from its source and drains when the source is removed
 - Slabs and stairs you walk up without jumping, doors that open with a click, ladders to climb, and torches that light the night
 - TNT with fuses, chain reactions, knockback and camera shake
 - Third-person camera with terrain-aware distance

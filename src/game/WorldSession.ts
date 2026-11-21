@@ -42,6 +42,7 @@ import type { WorldConfig } from '@/world/generation/config';
 import { TerrainGenerator, type SpawnPoint } from '@/world/generation/TerrainGenerator';
 import { FaceMesher } from '@/world/meshing/FaceMesher';
 import type { PlayerRecord, WorldEdits } from '@/world/persistence/types';
+import { BlockTicker } from '@/world/simulation/BlockTicker';
 import { World } from '@/world/World';
 
 /** Long-lived engine objects shared by every world session. */
@@ -87,6 +88,8 @@ export class WorldSession {
   readonly particles: DebrisParticles;
   readonly tnt: TntManager;
   readonly build: BuildTools;
+  /** Falling blocks and flowing water. */
+  readonly ticker: BlockTicker;
   readonly attract: boolean;
   /** Freezes player simulation and interaction (pause menu). */
   paused = false;
@@ -155,6 +158,7 @@ export class WorldSession {
     this.highlight = new BlockHighlight(scene);
     this.selectionBox = new SelectionBox(scene);
     this.build = new BuildTools(this.world);
+    this.ticker = new BlockTicker(this.world);
     this.build.enabled = false;
     this.particles = new DebrisParticles(
       scene,
@@ -300,6 +304,7 @@ export class WorldSession {
     }
     this.controller.step(step);
     this.tnt.update(step);
+    this.ticker.step();
   }
 
   update(dt: number, elapsed: number): void {
@@ -416,6 +421,7 @@ export class WorldSession {
     this.highlight.dispose();
     this.selectionBox.dispose();
     this.build.dispose();
+    this.ticker.dispose();
     this.particles.dispose();
     this.primedTnt.dispose();
     this.avatar.dispose();

@@ -7,6 +7,7 @@ import {
   clickWorld,
   createWorld,
   game,
+  layFlatPad,
   openGame,
   quitToMenu,
   tid,
@@ -24,27 +25,6 @@ async function cellAhead(page: Page, pitch = -0.6) {
   const ground = await aimAtGround(page, 0, pitch);
   expect(ground.ny).toBe(1);
   return { x: ground.x, y: ground.y + 1, z: ground.z };
-}
-
-/**
- * Lays a flat stone floor at the player's feet level with clear air above it,
- * north of and around the player, so placement and walking are predictable
- * whatever the terrain and plants at the spawn point.
- */
-async function clearPath(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const api = window.__visionmine;
-    const p = api.player()!;
-    const floor = Math.floor(p.y) - 1;
-    for (let dz = -10; dz <= 3; dz++) {
-      for (let dx = -4; dx <= 4; dx++) {
-        const x = Math.floor(p.x) + dx;
-        const z = Math.floor(p.z) + dz;
-        for (let y = floor + 1; y <= floor + 7; y++) api.setBlock(x, y, z, 0);
-        api.setBlock(x, floor, z, 3);
-      }
-    }
-  });
 }
 
 /**
@@ -97,7 +77,7 @@ test.describe('shaped blocks', () => {
     await openGame(page);
     await createWorld(page, { seed: 'new-blocks' });
     await captureMouse(page);
-    await clearPath(page);
+    await layFlatPad(page);
   });
 
   test('a slab is half a block high and can be walked onto', async ({ page }) => {
@@ -369,7 +349,7 @@ test.describe('plants and generator versions', () => {
     await openGame(page);
     await createWorld(page, { seed: 'meadow' });
     await captureMouse(page);
-    await clearPath(page);
+    await layFlatPad(page);
 
     await game.hold(page, Block.FlowerRed);
     const cell = await cellAhead(page);

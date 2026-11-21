@@ -95,6 +95,7 @@ Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Uni
 | `abilities.spec.ts`      | Sneaking on a ledge, double jump, dash, flying speed, auto-jump switched on in Settings, none of the creative abilities in survival                                                                                                           |
 | `builder.spec.ts`        | Selecting a region; fill, replace, clear, copy, rotate, paste; undo and redo by menu and by key; quick swap; hide interface; screenshot download; none of it in survival                                                                      |
 | `new-blocks.spec.ts`     | Slabs (both halves, walking onto one), stairs facing, doors (two blocks, open/close, passable, removed whole, undo), ladder placement and climbing, torchlight measured on screen, support rule, palette, plants only in new-generator worlds |
+| `simulation.spec.ts`     | Sand falling from mid-air and when undermined; water spreading to level 7 and no further, draining when plugged, and surviving a reload                                                                                                       |
 | `worlds.spec.ts`         | Empty list, ordering, play, rename (and cancel), delete with confirmation, damaged save listed and deletable                                                                                                                                  |
 | `performance.spec.ts`    | Chunk, geometry and texture counts while travelling 576 blocks, on returning, and after leaving and re-entering the world (Chromium only)                                                                                                     |
 
@@ -167,4 +168,7 @@ Still at the display's refresh cap in all three. `performance.spec.ts` continues
 - A slab cannot be combined with a second slab into a full block, stairs have no upside-down form, and glass panes do not join their neighbours automatically; a pane runs along one axis chosen when it is placed.
 - Torches stand on the floor only. Light is per face with no smoothing, and it does not light the player model, particles or weather.
 - An open door that swings into the space the player occupies is not blocked from doing so.
+- Sand falls a block at a time with no falling animation, and a block that lands on the player does not push them out of the way.
+- Water has no infinite-source rule (two sources do not create a third), does not push the player, and the step between two water levels shows as a small ledge.
+- Simulation only starts from a change: sand generated over a cave stays up until something next to it changes, and a stream cut off by leaving the area resumes only when disturbed.
 - Firefox and WebKit were tested through Playwright's builds on macOS only. Safari, mobile browsers and touch input were not tested; the game requires a keyboard and mouse.
