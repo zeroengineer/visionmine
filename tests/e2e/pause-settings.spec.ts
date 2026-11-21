@@ -121,12 +121,19 @@ test.describe('settings', () => {
     const settings = page.getByRole('dialog', { name: 'Settings' });
     await expect(settings).toBeVisible();
 
+    await expect(settings.getByRole('tab', { name: 'Graphics' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     await settings.getByLabel('Render distance').fill('5');
+    await settings.getByRole('tab', { name: 'Controls' }).click();
+    await expect(settings.getByLabel('Render distance')).toBeHidden();
     await settings.getByLabel('Field of view').fill('90');
     await settings.getByLabel('Invert vertical look').check();
-    await settings.getByLabel(/Debug overlay/).check();
+    await settings.getByRole('tab', { name: 'World & sound' }).click();
+    await settings.getByRole('switch', { name: /Debug overlay/ }).check();
+    await settings.getByRole('tab', { name: 'Graphics' }).click();
     await expect(settings.locator('output', { hasText: '5 chunks' })).toBeVisible();
-    await expect(settings.locator('output', { hasText: '90°' })).toBeVisible();
 
     expect(await storedSettings(page)).toMatchObject({
       renderDistance: 5,
@@ -153,7 +160,9 @@ test.describe('settings', () => {
     await page.click(tid('menu-settings'));
     await waitForScreen(page, 'settings');
     await expect(settings.getByLabel('Render distance')).toHaveValue('5');
+    await settings.getByRole('tab', { name: 'Controls' }).click();
     await expect(settings.getByLabel('Field of view')).toHaveValue('90');
+    await expect(settings.locator('output', { hasText: '90°' })).toBeVisible();
     await expect(settings.getByLabel('Invert vertical look')).toBeChecked();
 
     // Restore defaults clears the stored settings.

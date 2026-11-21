@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { actionForCode, defaultBindings, type ActionId } from '@/core/input/actions';
 import type { InputManager, InputEvents } from '@/core/input/InputManager';
 import {
   BlockInteraction,
@@ -15,13 +16,21 @@ import { mulberry32 } from '@/utils/rng';
 import { BlockId } from '@/world/blocks/blocks';
 import { flatWorld } from './helpers';
 
+/** Stands in for InputManager with the default bindings. */
 class FakeInput {
   readonly events = new Emitter<InputEvents>();
   isLocked = true;
+  /** Held codes: keyboard codes and `Mouse0`–`Mouse2`. */
   readonly keys = new Set<string>();
-  readonly buttons = new Set<number>();
+  private readonly bindings = defaultBindings();
   isDown = (code: string): boolean => this.keys.has(code);
-  isButtonDown = (button: number): boolean => this.buttons.has(button);
+  isActionDown = (action: ActionId): boolean =>
+    this.bindings[action].some((code) => this.keys.has(code));
+  /** A momentary press: fires the bound action without holding the code. */
+  press(code: string): void {
+    const action = actionForCode(this.bindings, code);
+    if (action) this.events.emit('action', { action });
+  }
   consumeLook(out: { x: number; y: number }): void {
     out.x = 0;
     out.y = 0;
@@ -95,7 +104,7 @@ describe('BlockInteraction', () => {
     interaction.events.on('broken', (e) => events.push(`${e.x},${e.y},${e.z}:${e.block}`));
     player.pitch = -Math.PI / 2 + 0.01;
     interaction.update(1 / 60);
-    input.events.emit('mousedown', { button: 0 });
+    input.press('Mouse0');
     expect(world.getBlock(8, 10, 8)).toBe(BlockId.Air);
     expect(events).toEqual([`8,10,8:${BlockId.Stone}`]);
     expect(log).toEqual([`broken:${BlockId.Stone}`]);
@@ -110,7 +119,7 @@ describe('BlockInteraction', () => {
     player.pitch = 0;
     interaction.update(1 / 60);
     expect(interaction.target).toMatchObject({ x: 8, y: 12, z: 5, nz: 1 });
-    input.events.emit('mousedown', { button: 2 });
+    input.press('Mouse2');
     expect(world.getBlock(8, 12, 6)).toBe(BlockId.Planks);
     expect(log).toEqual([`placed:${BlockId.Planks}`]);
   });
@@ -119,7 +128,7 @@ describe('BlockInteraction', () => {
     const { world, interaction, input, player, log } = setup();
     player.pitch = -Math.PI / 2 + 0.01; // looking at own feet; target face is the floor top
     interaction.update(1 / 60);
-    input.events.emit('mousedown', { button: 2 });
+    input.press('Mouse2');
     expect(world.getBlock(8, 11, 8)).toBe(BlockId.Air);
     expect(log).toEqual([]);
   });
@@ -128,21 +137,21 @@ describe('BlockInteraction', () => {
     const empty = setup(true, 0);
     empty.player.pitch = -1;
     empty.interaction.update(1 / 60);
-    empty.input.events.emit('mousedown', { button: 2 });
+    empty.input.press('Mouse2');
     expect(empty.log).toEqual([]);
 
     const { world, interaction, input, player } = setup();
     player.pitch = -Math.PI / 2 + 0.01;
     interaction.update(1 / 60);
     input.isLocked = false;
-    input.events.emit('mousedown', { button: 0 });
+    input.press('Mouse0');
     expect(world.getBlock(8, 10, 8)).toBe(BlockId.Stone);
   });
 
   it('takes time to mine in survival and never breaks bedrock', () => {
     const { world, interaction, input, player } = setup(false);
     player.pitch = -Math.PI / 2 + 0.01;
-    input.buttons.add(0);
+    input.keys.add('Mouse0');
     interaction.update(0.5);
     expect(world.getBlock(8, 10, 8)).toBe(BlockId.Stone); // stone hardness is 1.5 s
     expect(interaction.breakProgress).toBeGreaterThan(0);
@@ -158,7 +167,7 @@ describe('BlockInteraction', () => {
     const { interaction, input, player, log } = setup();
     player.pitch = -Math.PI / 2 + 0.01;
     interaction.update(1 / 60);
-    input.events.emit('mousedown', { button: 1 });
+    input.press('Mouse1');
     expect(log).toEqual([`picked:${BlockId.Stone}`]);
   });
 });

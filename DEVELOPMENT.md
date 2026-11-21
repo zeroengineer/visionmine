@@ -59,6 +59,7 @@ The browser tests run against the production build served by `vite preview` on p
 
 ## Adding things
 
+- **An action** — add an entry to `ACTION_SPECS` in `src/core/input/actions.ts` (label, category, default codes that no other action uses) and react to it with `input.isActionDown(id)` or the `action` event. It appears in Settings → Controls automatically and is rebindable.
 - **A block** — add an id and definition in `src/world/blocks/blocks.ts`, tiles in `tiles.ts`, and a painter per tile in `src/rendering/textures/TileAtlas.ts`. Placeable blocks appear in the creative palette automatically.
 - **A terrain preset** — add an entry to `TERRAIN_PRESETS` in `src/world/generation/config.ts`; the Create World screen lists it automatically.
 - **A setting** — add the field, default and sanitiser in `src/state/settingsStore.ts`, a control in `src/ui/menus/SettingsScreen.ts`, and subscribe where it takes effect.
@@ -81,16 +82,17 @@ Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Uni
 - **Unit tests** (`tests/unit`, Vitest, Node) — coordinates, terrain determinism and chunk borders, world edits and dirty propagation, face meshing, collision, raycasting, block interaction, player movement, explosions, inventory, settings, persistence (in-memory and IndexedDB through `fake-indexeddb`, including corrupt data) and chunk streaming.
 - **Browser tests** (`tests/e2e`, Playwright, production build) — drive the real UI with clicks and keys and assert on world state through `window.__visionmine`:
 
-| Spec                     | Covers                                                                                                                                    |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `flow.spec.ts`           | Boot to menu, rendered backdrop, create world → loading → playing, seed determinism, cancelling the form, no console errors               |
-| `movement.spec.ts`       | Walking and stopping, jumping, gravity, flight, wall collision, mouse look                                                                |
-| `blocks.spec.ts`         | Break, place, every hotbar block, placement refused inside the player, pick block, TNT, survival consumption and timed mining             |
-| `inventory.spec.ts`      | Number keys and wheel, opening and closing, creative palette, moving, swapping and splitting stacks, backpack expansion, survival view    |
-| `pause-settings.spec.ts` | Pause freezes simulation and clock, resume, Save Now, mode switch, Save & Quit and Continue, settings applied and persisted, defaults, F3 |
-| `persistence.spec.ts`    | Edits, player, view, flight and inventory restored after reload; save on leaving; survival state; Reset World; New Terrain                |
-| `worlds.spec.ts`         | Empty list, ordering, play, rename (and cancel), delete with confirmation, damaged save listed and deletable                              |
-| `performance.spec.ts`    | Chunk, geometry and texture counts while travelling 576 blocks, on returning, and after leaving and re-entering the world (Chromium only) |
+| Spec                     | Covers                                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flow.spec.ts`           | Boot to menu, rendered backdrop, create world → loading → playing, seed determinism, cancelling the form, no console errors                            |
+| `movement.spec.ts`       | Walking and stopping, jumping, gravity, flight, wall collision, mouse look                                                                             |
+| `blocks.spec.ts`         | Break, place, every hotbar block, placement refused inside the player, pick block, TNT, survival consumption and timed mining                          |
+| `inventory.spec.ts`      | Number keys and wheel, opening and closing, creative palette, moving, swapping and splitting stacks, backpack expansion, survival view                 |
+| `pause-settings.spec.ts` | Pause freezes simulation and clock, resume, Save Now, mode switch, Save & Quit and Continue, settings applied and persisted, defaults, F3              |
+| `persistence.spec.ts`    | Edits, player, view, flight and inventory restored after reload; save on leaving; survival state; Reset World; New Terrain                             |
+| `controls.spec.ts`       | Default key list, rebinding takes effect in play and survives reload, swapping on conflict, mouse ↔ key exchange, cancel, remove, reserved keys, reset |
+| `worlds.spec.ts`         | Empty list, ordering, play, rename (and cancel), delete with confirmation, damaged save listed and deletable                                           |
+| `performance.spec.ts`    | Chunk, geometry and texture counts while travelling 576 blocks, on returning, and after leaving and re-entering the world (Chromium only)              |
 
 Tests use real pointer lock where the browser grants it to automation (Chromium, Firefox) and the debug hook's `virtualLock()` otherwise (WebKit).
 

@@ -1,16 +1,9 @@
 import { sessionStore } from '@/state/sessionStore';
+import { settingsStore } from '@/state/settingsStore';
 import { uiStore } from '@/state/uiStore';
 import { h, type View } from '../components/dom';
+import { gameplayTips } from '../components/controlsSummary';
 import { bindScreen } from '../components/screen';
-
-const TIPS = [
-  'Double-tap Space in Creative mode to start flying.',
-  'Right-click a TNT block to light the fuse — then run.',
-  'Middle-click a block in Creative mode to pick it.',
-  'Press V to see yourself in third person.',
-  'Press F3 for coordinates and performance numbers.',
-  'The same seed always generates the same world.',
-];
 
 export function createLoadingScreen(): View {
   const title = h('h2', { class: 'loading__title' });
@@ -38,7 +31,8 @@ export function createLoadingScreen(): View {
 
   const unsubscribers = [
     bindScreen(el, ['loading', 'boot'], () => {
-      tip.textContent = TIPS[Math.floor(Math.random() * TIPS.length)]!;
+      const tips = gameplayTips(settingsStore.getState().bindings);
+      tip.textContent = tips[Math.floor(Math.random() * tips.length)]!;
     }),
     sessionStore.subscribe(
       (s) => s.worldName,

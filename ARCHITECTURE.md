@@ -10,7 +10,7 @@ src/
     engine/      GameLoop (fixed-step simulation + interpolated rendering)
     renderer/    WebGL renderer wrapper, quality tiers, adaptive resolution
     camera/      Camera rig (first and third person)
-    input/       Keyboard, mouse and pointer-lock state
+    input/       Keyboard, mouse and pointer-lock state; action map and bindings
     audio/       Synthesised sound effects
     scene/ resources/
   world/       Voxel data and rules — no Three.js, no DOM
@@ -94,6 +94,12 @@ WorldSession                                    World.addChunk ──► event: 
 ### Introducing greedy meshing
 
 `ChunkMesher` is the only seam involved. A greedy mesher implements the same interface and emits fewer faces with `width`/`height` greater than one; the instance matrix already scales the quad and the shader already tiles the texture by the quad size (`vFaceUv = uv * size`). Nothing in `World`, `ChunkManager` or `ChunkRenderer` changes.
+
+## Input and actions
+
+Gameplay code never names a key. `core/input/actions.ts` defines the actions (move, jump, break block, open inventory, …), their default bindings and the pure functions that validate, assign and swap bindings; a binding code is a `KeyboardEvent.code` or `Mouse0`–`Mouse2`. `InputManager` holds the current bindings and exposes `isActionDown(action)` for held state and an `action` event for presses. The bindings live in `settingsStore` (validated on load like every other stored value) and `Game` forwards changes to the input manager.
+
+Three inputs are deliberately not actions: mouse look, the hotbar digits, and Escape, which the browser itself uses to release the mouse. The Controls tab in Settings, the main-menu controls list and the loading tips all render from the same bindings.
 
 ## Player, collision and interaction
 

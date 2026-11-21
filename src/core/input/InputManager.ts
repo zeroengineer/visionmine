@@ -1,4 +1,11 @@
 import { Emitter } from '@/utils/Emitter';
+import {
+  buildCodeLookup,
+  defaultBindings,
+  mouseCode,
+  type ActionId,
+  type Bindings,
+} from './actions';
 
 export interface InputEvents {
   keydown: { code: string };
@@ -8,19 +15,15 @@ export interface InputEvents {
   /** +1 = wheel down / next, -1 = wheel up / previous. */
   wheel: { direction: 1 | -1 };
   lockchange: { locked: boolean };
+  /** A key or mouse button bound to an action was pressed. */
+  action: { action: ActionId };
 }
 
 const MAX_MOUSE_DELTA = 400;
-/** Keys whose browser default (scrolling, focus change, find) must not fire while playing. */
-const CAPTURED_KEYS = new Set([
-  'Space',
-  'Tab',
-  'F3',
-  'ArrowUp',
-  'ArrowDown',
-  'ArrowLeft',
-  'ArrowRight',
-]);
+/** Keys whose browser default (scrolling, focus change) must not fire while playing. */
+const CAPTURED_KEYS = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+/** Function keys have browser defaults (find, help) that a bound action must replace. */
+const FUNCTION_KEY = /^F\d{1,2}$/;
 
 function isTextInput(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -28,13 +31,16 @@ function isTextInput(target: EventTarget | null): boolean {
 }
 
 /**
- * Collects keyboard and mouse state. Continuous state (held keys, look delta) is
- * polled by gameplay code; discrete actions are delivered through `events`.
+ * Collects keyboard and mouse state and translates it into game actions through
+ * the current bindings. Continuous state (held actions, look delta) is polled by
+ * gameplay code; discrete presses are delivered through `events`.
  */
 export class InputManager {
   readonly events = new Emitter<InputEvents>();
+  /** Codes currently held: keyboard codes and `Mouse0`–`Mouse2`. */
   private readonly keys = new Set<string>();
-  private readonly buttons = [false, false, false];
+  private bindings: Bindings = defaultBindings();
+  private codeToAction = buildCodeLookup(this.bindings);
   private lookX = 0;
   private lookY = 0;
   private wheelAccum = 0;
@@ -63,8 +69,19 @@ export class InputManager {
     return this.keys.has(code);
   }
 
-  isButtonDown(button: number): boolean {
-    return this.buttons[button] === true;
+  /** Replaces the key and mouse bindings. Held state carries over by code. */
+  setBindings(bindings: Bindings): void {
+    this.bindings = bindings;
+    this.codeToAction = buildCodeLookup(bindings);
+  }
+
+  /** True while any key or button bound to the action is held. */
+  isActionDown(action: ActionId): boolean {
+    const codes = this.bindings[action];
+    for (let i = 0; i < codes.length; i++) {
+      if (this.keys.has(codes[i]!)) return true;
+    }
+    return false;
   }
 
   /** Returns the mouse movement accumulated since the last call and resets it. */
@@ -107,7 +124,6 @@ export class InputManager {
   /** Drops all held keys and buttons (used when gameplay input is suspended). */
   releaseAll(): void {
     this.keys.clear();
-    this.buttons.fill(false);
     this.lookX = 0;
     this.lookY = 0;
   }
@@ -129,11 +145,16 @@ export class InputManager {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (isTextInput(event.target)) return;
-    if (this.locked && CAPTURED_KEYS.has(event.code)) event.preventDefault();
-    if (event.code === 'F3') event.preventDefault();
+    const action = this.codeToAction.get(event.code);
+    const shortcut = event.ctrlKey || event.metaKey;
+    if (this.locked && !shortcut && (CAPTURED_KEYS.has(event.code) || action !== undefined)) {
+      event.preventDefault();
+    }
+    if (action !== undefined && FUNCTION_KEY.test(event.code)) event.preventDefault();
     if (event.repeat) return;
     this.keys.add(event.code);
     this.events.emit('keydown', { code: event.code });
+    if (action !== undefined) this.events.emit('action', { action });
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
@@ -170,13 +191,16 @@ export class InputManager {
 
   private readonly onMouseDown = (event: MouseEvent): void => {
     if (event.button > 2) return;
-    this.buttons[event.button] = true;
+    const code = mouseCode(event.button);
+    this.keys.add(code);
     this.events.emit('mousedown', { button: event.button });
+    const action = this.codeToAction.get(code);
+    if (action !== undefined) this.events.emit('action', { action });
   };
 
   private readonly onMouseUp = (event: MouseEvent): void => {
     if (event.button > 2) return;
-    this.buttons[event.button] = false;
+    this.keys.delete(mouseCode(event.button));
     this.events.emit('mouseup', { button: event.button });
   };
 

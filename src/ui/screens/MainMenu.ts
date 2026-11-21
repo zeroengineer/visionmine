@@ -1,23 +1,11 @@
+import { settingsStore } from '@/state/settingsStore';
 import { uiStore } from '@/state/uiStore';
 import type { WorldRecord } from '@/world/persistence/types';
 import { button } from '../components/controls';
+import { controlsSummary } from '../components/controlsSummary';
 import { h, type View } from '../components/dom';
 import { bindScreen } from '../components/screen';
 import type { GameCommands } from '../GameCommands';
-
-const CONTROLS: Array<[string, string]> = [
-  ['W A S D', 'Move'],
-  ['Mouse', 'Look'],
-  ['Space', 'Jump · fly up'],
-  ['Shift', 'Sprint'],
-  ['Left click', 'Break'],
-  ['Right click', 'Place · light TNT'],
-  ['1–9 · Wheel', 'Select block'],
-  ['E', 'Inventory'],
-  ['F', 'Toggle flying'],
-  ['V', 'Third person'],
-  ['Esc', 'Pause'],
-];
 
 export function createMainMenu(commands: GameCommands): View {
   let latest: WorldRecord | null = null;
@@ -62,6 +50,18 @@ export function createMainMenu(commands: GameCommands): View {
 
   const storageNote = h('p', { class: 'menu__note', attrs: { role: 'status' } });
 
+  const controlsList = h('dl', { class: 'keys', attrs: { 'data-testid': 'menu-controls' } });
+  const renderControls = (): void => {
+    controlsList.replaceChildren(
+      ...controlsSummary(settingsStore.getState().bindings).flatMap(([key, action]) => [
+        h('dt', { class: 'keys__key', text: key }),
+        h('dd', { class: 'keys__action', text: action }),
+      ]),
+    );
+  };
+  renderControls();
+  const unsubscribeBindings = settingsStore.subscribe((s) => s.bindings, renderControls);
+
   const el = h(
     'div',
     { class: 'menu', attrs: { 'data-screen': 'menu' } },
@@ -81,14 +81,7 @@ export function createMainMenu(commands: GameCommands): View {
       'aside',
       { class: 'menu__controls', attrs: { 'aria-label': 'Controls' } },
       h('h2', { class: 'menu__controls-title', text: 'Controls' }),
-      h(
-        'dl',
-        { class: 'keys' },
-        ...CONTROLS.flatMap(([key, action]) => [
-          h('dt', { class: 'keys__key', text: key }),
-          h('dd', { class: 'keys__action', text: action }),
-        ]),
-      ),
+      controlsList,
     ),
   );
 
@@ -118,6 +111,7 @@ export function createMainMenu(commands: GameCommands): View {
     el,
     dispose() {
       unsubscribe();
+      unsubscribeBindings();
       el.remove();
     },
   };

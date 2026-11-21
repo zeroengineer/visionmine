@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import { Sfx } from '@/core/audio/Sfx';
 import { CameraRig } from '@/core/camera/CameraRig';
+import type { ActionId } from '@/core/input/actions';
 import { GameLoop } from '@/core/engine/GameLoop';
 import { InputManager } from '@/core/input/InputManager';
 import { AdaptiveResolution } from '@/core/renderer/AdaptiveResolution';
@@ -109,6 +110,12 @@ export class Game implements GameCommands {
           this.input.requestLock();
       }),
       this.input.events.on('keydown', ({ code }) => this.onKeyDown(code)),
+      this.input.events.on('action', ({ action }) => this.onAction(action)),
+      settingsStore.subscribe(
+        (s) => s.bindings,
+        (bindings) => this.input.setBindings(bindings),
+        { fireImmediately: true },
+      ),
       this.input.events.on('lockchange', ({ locked }) => this.onLockChange(locked)),
       this.renderer.onResize((width, height) => this.cameraRig.setAspect(width, height)),
       settingsStore.subscribe(
@@ -423,23 +430,24 @@ export class Game implements GameCommands {
   }
 
   private onKeyDown(code: string): void {
+    // Escape is not rebindable: the browser itself uses it to release the mouse.
+    if (code !== 'Escape') return;
     const ui = uiStore.getState();
-    switch (code) {
-      case 'KeyE':
-        if (ui.screen === 'playing' && this.input.isLocked) this.openInventory();
-        else if (ui.screen === 'inventory') this.closeInventory();
-        break;
-      case 'Escape':
-        if (ui.screen === 'inventory') this.closeInventory();
-        else if (ui.screen === 'playing') this.pause();
-        else if (ui.screen === 'paused') {
-          if (performance.now() - this.pausedAt > PAUSE_DEBOUNCE_MS) this.resume();
-        } else if (ui.screen === 'settings' || ui.screen === 'create' || ui.screen === 'worlds')
-          ui.back();
-        break;
-      case 'F3':
-        settingsStore.getState().set({ showDebug: !settingsStore.getState().showDebug });
-        break;
+    if (ui.screen === 'inventory') this.closeInventory();
+    else if (ui.screen === 'playing') this.pause();
+    else if (ui.screen === 'paused') {
+      if (performance.now() - this.pausedAt > PAUSE_DEBOUNCE_MS) this.resume();
+    } else if (ui.screen === 'settings' || ui.screen === 'create' || ui.screen === 'worlds')
+      ui.back();
+  }
+
+  private onAction(action: ActionId): void {
+    const ui = uiStore.getState();
+    if (action === 'inventory') {
+      if (ui.screen === 'playing' && this.input.isLocked) this.openInventory();
+      else if (ui.screen === 'inventory') this.closeInventory();
+    } else if (action === 'debugOverlay') {
+      settingsStore.getState().set({ showDebug: !settingsStore.getState().showDebug });
     }
   }
 

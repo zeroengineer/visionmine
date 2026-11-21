@@ -1,6 +1,12 @@
 import { createStore } from 'zustand/vanilla';
 import { subscribeWithSelector } from 'zustand/middleware';
 import {
+  bindingsEqual,
+  defaultBindings,
+  sanitizeBindings,
+  type Bindings,
+} from '@/core/input/actions';
+import {
   classifyDevice,
   probeDevice,
   QUALITY_PROFILES,
@@ -22,6 +28,8 @@ export interface Settings {
   dayLengthMinutes: number;
   volume: number;
   showDebug: boolean;
+  /** Keys and mouse buttons bound to each action. */
+  bindings: Bindings;
 }
 
 export interface SettingsState extends Settings {
@@ -54,6 +62,7 @@ function defaults(): Settings {
     dayLengthMinutes: 12,
     volume: 0.6,
     showDebug: false,
+    bindings: defaultBindings(),
   };
 }
 
@@ -96,7 +105,15 @@ export function sanitizeSettings(raw: unknown, base: Settings): Settings {
     ),
     volume: clampNumber(r.volume, 0, 1, base.volume),
     showDebug: bool(r.showDebug, base.showDebug),
+    bindings: keepIfEqual(r.bindings, base.bindings),
   };
+}
+
+/** Sanitises stored bindings, keeping the current object when nothing changed so subscribers stay quiet. */
+function keepIfEqual(raw: unknown, current: Bindings): Bindings {
+  if (raw === undefined || raw === current) return current;
+  const next = sanitizeBindings(raw);
+  return bindingsEqual(next, current) ? current : next;
 }
 
 function load(): Settings {
