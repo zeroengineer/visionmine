@@ -123,7 +123,7 @@ export class ChunkRenderer {
     // Each chunk layer owns its geometry: instanced attributes live on the geometry,
     // and sharing vertex buffers across disposable geometries is unsafe in WebGL state.
     const geometry = new THREE.PlaneGeometry(1, 1);
-    const faceAttr = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+    const faceAttr = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
     const aoAttr = new THREE.InstancedBufferAttribute(new Uint8Array(capacity * 4), 4, true);
     faceAttr.setUsage(THREE.DynamicDrawUsage);
     aoAttr.setUsage(THREE.DynamicDrawUsage);
@@ -181,10 +181,11 @@ export class ChunkRenderer {
       matrices[m + 14] = src[s + 2]! + origin[2]! + (u[2] * w + v[2] * h) * 0.5;
       matrices[m + 15] = 1;
 
-      const f = i * 3;
+      const f = i * 4;
       faces[f] = src[s + 4]!;
       faces[f + 1] = w;
       faces[f + 2] = h;
+      faces[f + 3] = src[s + 11]!;
 
       const a = i * 4;
       ao[a] = src[s + 5]! * 255;

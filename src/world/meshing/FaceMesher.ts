@@ -1,8 +1,17 @@
-import { blockBoxes, FACE_TILES, IS_CUBE, IS_LIQUID, IS_OPAQUE } from '../blocks/blocks';
+import {
+  blockBoxes,
+  FACE_TILES,
+  getBlockDef,
+  IS_CUBE,
+  IS_LIQUID,
+  IS_OPAQUE,
+} from '../blocks/blocks';
 import type { Box } from '../blocks/shapes';
 import { CHUNK_HEIGHT, CHUNK_SIZE } from '../constants';
 import type { Chunk } from '../chunks/Chunk';
+import { BlockLight, MAX_LIGHT } from '../lighting/BlockLight';
 import {
+  DIAGONAL_START,
   FACE_BASIS,
   FACE_ORIGIN,
   FACE_STRIDE,
@@ -18,7 +27,8 @@ const PAD_AREA = PAD * PAD;
 const WATER_SURFACE_DROP = 0.12;
 const AO_LEVELS = [0.45, 0.65, 0.82, 1] as const;
 
-const FACE_AXES = FACE_BASIS;
+/** The six axis-aligned faces. */
+const FACE_AXES = FACE_BASIS.slice(0, 6);
 /** Brightness of shaped blocks, which get no per-corner ambient occlusion. */
 const SHAPE_SHADE = 0.92;
 
@@ -50,6 +60,7 @@ class GrowableFaceBuffer implements FaceBatch {
     ao3: number,
     width = 1,
     height = 1,
+    light = 0,
   ): void {
     let offset = this.count * FACE_STRIDE;
     if (offset + FACE_STRIDE > this.data.length) {
@@ -68,7 +79,8 @@ class GrowableFaceBuffer implements FaceBatch {
     d[offset++] = ao2;
     d[offset++] = ao3;
     d[offset++] = width; // quad size in blocks: below 1 for shaped blocks,
-    d[offset] = height; // above 1 if a greedy mesher ever merges faces
+    d[offset++] = height; // above 1 if a greedy mesher ever merges faces
+    d[offset] = light;
     this.count++;
   }
 }
@@ -88,6 +100,7 @@ export class FaceMesher implements ChunkMesher {
   private readonly padded = new Uint8Array(PAD_AREA * (CHUNK_HEIGHT + 2));
   private readonly opaque = new GrowableFaceBuffer();
   private readonly translucent = new GrowableFaceBuffer();
+  private readonly light = new BlockLight();
 
   mesh(chunk: Chunk, lookup: ChunkLookup): ChunkMeshData {
     const opaque = this.opaque;
@@ -100,6 +113,8 @@ export class FaceMesher implements ChunkMesher {
 
     this.fillPadded(chunk, lookup, top);
     const pad = this.padded;
+    const light = this.light;
+    const lit = light.compute(chunk, lookup);
     let minY = CHUNK_HEIGHT;
     let maxY = 0;
 
@@ -113,8 +128,38 @@ export class FaceMesher implements ChunkMesher {
           const id = pad[center]!;
           if (id === 0) continue;
           if (IS_CUBE[id] !== 1) {
-            const meta = chunk.getMeta(x + z * CHUNK_SIZE + y * 256);
-            this.emitShape(blockBoxes(id, meta), id, x, y, z, center);
+            if (getBlockDef(id).shape === 'cross') {
+              // Two crossed quads, each drawn from both sides.
+              const tile = FACE_TILES[id * 6]!;
+              for (let d = 0; d < 4; d++) {
+                const start = DIAGONAL_START[d]!;
+                opaque.push(
+                  x + start[0],
+                  y,
+                  z + start[2],
+                  6 + d,
+                  tile,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  1,
+                  lit ? light.at(x, y, z) / MAX_LIGHT : 0,
+                );
+              }
+            } else {
+              const meta = chunk.getMeta(x + z * CHUNK_SIZE + y * 256);
+              this.emitShape(
+                blockBoxes(id, meta),
+                id,
+                x,
+                y,
+                z,
+                center,
+                lit ? light.at(x, y, z) / MAX_LIGHT : 0,
+              );
+            }
             if (y < minY) minY = y;
             if (y > maxY) maxY = y;
             continue;
@@ -128,9 +173,12 @@ export class FaceMesher implements ChunkMesher {
             if (IS_OPAQUE[neighbour] === 1 || neighbour === id) continue;
 
             const tile = FACE_TILES[id * 6 + face]!;
+            // A face is lit by the light in the cell it looks into.
+            const n = FACE_AXES[face]!.n;
+            const faceLight = lit ? light.at(x + n[0], y + n[1], z + n[2]) / MAX_LIGHT : 0;
             if (liquid) {
               const drop = face === 2 ? WATER_SURFACE_DROP : 0;
-              translucent.push(x, y - drop, z, face, tile, 1, 1, 1, 1);
+              translucent.push(x, y - drop, z, face, tile, 1, 1, 1, 1, 1, 1, faceLight);
             } else {
               const u = U_OFFSET[face]!;
               const v = V_OFFSET[face]!;
@@ -142,7 +190,7 @@ export class FaceMesher implements ChunkMesher {
               const ao1 = occlusion(uPos, vNeg, IS_OPAQUE[pad[front + u - v]!]!);
               const ao2 = occlusion(uNeg, vPos, IS_OPAQUE[pad[front - u + v]!]!);
               const ao3 = occlusion(uPos, vPos, IS_OPAQUE[pad[front + u + v]!]!);
-              opaque.push(x, y, z, face, tile, ao0, ao1, ao2, ao3);
+              opaque.push(x, y, z, face, tile, ao0, ao1, ao2, ao3, 1, 1, faceLight);
             }
             if (y < minY) minY = y;
             if (y > maxY) maxY = y;
@@ -166,6 +214,7 @@ export class FaceMesher implements ChunkMesher {
     y: number,
     z: number,
     center: number,
+    light: number,
   ): void {
     const pad = this.padded;
     for (let b = 0; b < boxes.length; b++) {
@@ -198,6 +247,7 @@ export class FaceMesher implements ChunkMesher {
           SHAPE_SHADE,
           box[uAxis + 3]! - box[uAxis]!,
           box[vAxis + 3]! - box[vAxis]!,
+          light,
         );
       }
     }

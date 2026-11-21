@@ -4,7 +4,7 @@ import { BlockId, getBlockDef, IS_LIQUID, IS_SOLID } from '@/world/blocks/blocks
 import { isValidY } from '@/world/chunks/coords';
 import type { World } from '@/world/World';
 import { PLAYER_HALF_WIDTH, PLAYER_HEIGHT, type Player, type Vec3Like } from '../player/Player';
-import { placementMeta } from './placement';
+import { planPlacement } from './placement';
 import { createRaycastHit, raycastVoxels, type RaycastHit } from './voxelRaycast';
 
 /** Game-mode and inventory decisions the interaction system delegates. */
@@ -96,7 +96,7 @@ export class BlockInteraction {
         this.placeCooldown = REPEAT_PLACE_INTERVAL;
         this.tryPlace();
       } else if (action === 'pickBlock' && this.hasTarget) {
-        this.rules.onPicked(this.hit.block);
+        this.rules.onPicked(getBlockDef(this.hit.block).item);
       }
     });
   }
@@ -164,7 +164,8 @@ export class BlockInteraction {
     if (!this.world.setBlock(x, y, z, BlockId.Air)) return false;
     this.breakProgress = 0;
     this.events.emit('broken', { x, y, z, block });
-    this.rules.onBroken(block);
+    // The upper half of a door yields the door, not itself.
+    this.rules.onBroken(getBlockDef(block).item);
     this.retarget();
     return true;
   }
@@ -174,12 +175,16 @@ export class BlockInteraction {
     if (!this.hasTarget) return false;
     if (this.rules.onUse(this.hit)) return true;
     const block = this.rules.selectedBlock();
-    const x = this.hit.x + this.hit.nx;
-    const y = this.hit.y + this.hit.ny;
-    const z = this.hit.z + this.hit.nz;
-    if (!canPlaceBlock(this.world, x, y, z, block, this.player.position)) return false;
-    const meta = placementMeta(block, this.hit, this.player.yaw);
-    if (!this.world.setBlock(x, y, z, block, meta)) return false;
+    const plan = planPlacement(block, this.hit, this.player.yaw);
+    if (!plan) return false;
+    // Every part must fit (a door needs both of its cells free).
+    for (const part of plan) {
+      if (!canPlaceBlock(this.world, part.x, part.y, part.z, part.block, this.player.position)) {
+        return false;
+      }
+    }
+    for (const part of plan) this.world.setBlock(part.x, part.y, part.z, part.block, part.meta);
+    const { x, y, z } = plan[0]!;
     this.events.emit('placed', { x, y, z, block });
     this.rules.onPlaced(block);
     this.retarget();

@@ -5,6 +5,7 @@ import type { InputManager } from '@/core/input/InputManager';
 import { QUALITY_PROFILES } from '@/core/renderer/quality';
 import type { Renderer } from '@/core/renderer/Renderer';
 import { BuildTools, type BuildAction, type BuildResult } from '@/gameplay/building/BuildTools';
+import { installAttachmentRules, toggleDoor } from '@/gameplay/interaction/attachments';
 import {
   BlockInteraction,
   blockIntersectsPlayer,
@@ -170,6 +171,7 @@ export class WorldSession {
     );
 
     this.unsubscribers.push(
+      installAttachmentRules(this.world),
       settingsStore.subscribe(
         (s) => s.renderDistance,
         (distance) => {
@@ -451,6 +453,11 @@ export class WorldSession {
         if (rules().infiniteBlocks) inventory.getState().pick(block);
       },
       onUse: (hit) => {
+        if (toggleDoor(this.world, hit.x, hit.y, hit.z)) {
+          this.engine.sfx.play('place');
+          this.build.history.commit();
+          return true;
+        }
         if (hit.block !== BlockId.Tnt) return false;
         this.tnt.ignite(hit.x, hit.y, hit.z);
         return true;

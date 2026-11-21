@@ -18,7 +18,7 @@ import { sessionStore } from '@/state/sessionStore';
 import { settingsStore } from '@/state/settingsStore';
 import { uiStore } from '@/state/uiStore';
 import type { DebugInfo, GameCommands, NewWorldOptions } from '@/ui/GameCommands';
-import type { WorldConfig } from '@/world/generation/config';
+import { GENERATOR_VERSION, type WorldConfig } from '@/world/generation/config';
 import { openRepository } from '@/world/persistence/openRepository';
 import type {
   PlayerRecord,
@@ -31,7 +31,12 @@ import { WorldService } from './WorldService';
 import { WorldSession, type EngineContext } from './WorldSession';
 
 /** Terrain shown behind the main menu. */
-const MENU_WORLD: WorldConfig = { seed: 'visionmine-title', terrain: 'standard', treeDensity: 1 };
+const MENU_WORLD: WorldConfig = {
+  seed: 'visionmine-title',
+  terrain: 'standard',
+  treeDensity: 1,
+  generator: GENERATOR_VERSION,
+};
 /** Compass names by yaw sector; yaw 0 looks toward -Z (north) and increases turning left. */
 const FACING = [
   'North',

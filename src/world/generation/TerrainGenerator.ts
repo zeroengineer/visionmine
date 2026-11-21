@@ -61,6 +61,10 @@ export class TerrainGenerator {
   readonly seed: number;
   private readonly preset: TerrainPreset;
   private readonly treeDensity: number;
+  /** Generator version of this world; newer features are skipped for older worlds. */
+  private readonly version: number;
+  /** Plant chosen for each column of the chunk being generated (0 = none). */
+  private readonly plants = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE);
   private readonly continent: NoiseFunction2D;
   private readonly erosion: NoiseFunction2D;
   private readonly ridge: NoiseFunction2D;
@@ -80,6 +84,7 @@ export class TerrainGenerator {
     this.seed = hashString(config.seed);
     this.preset = TERRAIN_PRESETS[config.terrain];
     this.treeDensity = config.treeDensity;
+    this.version = config.generator ?? 1;
     const layer = (index: number): NoiseFunction2D =>
       createNoise2D(mulberry32(this.seed + index * 0x9e3779b1));
     this.continent = layer(1);
@@ -183,10 +188,12 @@ export class TerrainGenerator {
           blocks[base + y * 256] = column.filler;
         blocks[base + height * 256] = column.surface;
         for (let y = height + 1; y <= SEA_LEVEL; y++) blocks[base + y * 256] = BlockId.Water;
+        this.plants[base] = this.version >= 2 ? this.choosePlant(x0 + lx, z0 + lz, column) : 0;
       }
     }
 
     this.placeTrees(blocks, x0, z0);
+    if (this.version >= 2) this.placePlants(blocks);
     return blocks;
   }
 
@@ -219,6 +226,38 @@ export class TerrainGenerator {
       }
     }
     return best ?? { x: 0.5, y: SEA_LEVEL + 2, z: 0.5 };
+  }
+
+  /** Flower or grass tuft growing on this column's surface, or 0. */
+  private choosePlant(x: number, z: number, column: ColumnSample): number {
+    if (column.surface !== BlockId.Grass || column.height <= SEA_LEVEL) return 0;
+    if (column.height + 1 >= CHUNK_HEIGHT) return 0;
+    const roll = hash3(this.seed, x, z, 91);
+    const meadow = column.biome === 'plains';
+    const grass = meadow ? 0.1 : 0.04;
+    const flower = meadow ? 0.02 : 0.008;
+    if (roll < grass) return BlockId.TallGrass;
+    if (roll < grass + flower) return BlockId.FlowerRed;
+    if (roll < grass + flower * 2) return BlockId.FlowerYellow;
+    return 0;
+  }
+
+  /** Puts the chosen plants on top of their columns, wherever a tree did not take the spot. */
+  private placePlants(blocks: Uint8Array): void {
+    const plants = this.plants;
+    for (let base = 0; base < plants.length; base++) {
+      const plant = plants[base]!;
+      if (plant === 0) continue;
+      // The surface is the highest grass block of the column, found from the top down.
+      for (let y = CHUNK_HEIGHT - 2; y > SEA_LEVEL; y--) {
+        const below = blocks[base + y * 256]!;
+        if (below === BlockId.Air) continue;
+        if (below === BlockId.Grass && blocks[base + (y + 1) * 256] === BlockId.Air) {
+          blocks[base + (y + 1) * 256] = plant;
+        }
+        break;
+      }
+    }
   }
 
   private placeTrees(blocks: Uint8Array, x0: number, z0: number): void {

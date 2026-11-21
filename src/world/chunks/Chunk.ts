@@ -13,6 +13,11 @@ export class Chunk {
    * `blocks`. Allocated on first use: most chunks never hold a stateful block.
    */
   meta: Uint8Array | null = null;
+  /**
+   * Flat indices of blocks that give off light. Kept by `World` as blocks
+   * change; generated terrain has none, so it is usually null.
+   */
+  emitters: Set<number> | null = null;
 
   constructor(
     readonly cx: number,

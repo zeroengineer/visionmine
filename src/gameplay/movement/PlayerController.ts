@@ -1,6 +1,6 @@
 import type { InputManager } from '@/core/input/InputManager';
 import { clamp } from '@/utils/math';
-import { BlockId, IS_SOLID } from '@/world/blocks/blocks';
+import { BlockId, getBlockDef, IS_CUBE, IS_SOLID } from '@/world/blocks/blocks';
 import { CHUNK_HEIGHT } from '@/world/constants';
 import type { World } from '@/world/World';
 import { bodyCollides, boxCollides, moveWithStepUp, type MoveResult } from '../collision/aabb';
@@ -13,6 +13,7 @@ export interface MovementConfig {
   flySpeed: number;
   flySprintSpeed: number;
   swimSpeed: number;
+  climbSpeed: number;
   sneakSpeed: number;
   jumpVelocity: number;
   /** Upward speed of a jump made in mid-air. */
@@ -36,6 +37,7 @@ export const DEFAULT_MOVEMENT: MovementConfig = {
   flySpeed: 11,
   flySprintSpeed: 24,
   swimSpeed: 2.6,
+  climbSpeed: 3,
   sneakSpeed: 1.4,
   jumpVelocity: 8.7,
   airJumpVelocity: 8.2,
@@ -222,6 +224,7 @@ export class PlayerController {
       wishX /= length;
       wishZ /= length;
     }
+    player.climbing = !player.flying && !player.inWater && this.isOnLadder();
     player.sneaking = descend && !player.flying && !player.inWater;
 
     // Sprint is either held, or switched on by a press and kept until the player stops.
@@ -270,6 +273,14 @@ export class PlayerController {
       // Buoyancy: sink slowly, swim up while jump is held.
       const targetY = jump ? 3.4 : -2.2;
       velocity.y += (targetY - velocity.y) * Math.min(1, 5 * dt);
+    } else if (player.climbing) {
+      // On a ladder: steer freely, climb with jump or by pushing forward, hold
+      // still with sneak, and otherwise slide down slowly.
+      const blend = Math.min(1, cfg.groundAcceleration * dt);
+      velocity.x += (wishX * cfg.sneakSpeed * 1.6 - velocity.x) * blend;
+      velocity.z += (wishZ * cfg.sneakSpeed * 1.6 - velocity.z) * blend;
+      velocity.y = jump || forward > 0 ? cfg.climbSpeed : descend ? 0 : -cfg.climbSpeed * 0.7;
+      this.timeSinceGround = 0;
     } else {
       const speed = player.sneaking
         ? cfg.sneakSpeed
@@ -305,7 +316,9 @@ export class PlayerController {
         this.airJumpsUsed++;
       }
     }
-    if (player.onGround || player.flying || player.inWater) this.airJumpsUsed = 0;
+    if (player.onGround || player.flying || player.inWater || player.climbing) {
+      this.airJumpsUsed = 0;
+    }
 
     const walking = player.onGround && !player.flying && !player.inWater && velocity.y <= 0;
     if (walking && player.sneaking) this.guardEdges(dt);
@@ -355,6 +368,19 @@ export class PlayerController {
       y,
       z + PLAYER_HALF_WIDTH,
     );
+  }
+
+  /** True when the player's body is in a cell holding something climbable. */
+  private isOnLadder(): boolean {
+    const { position } = this.player;
+    const x = Math.floor(position.x);
+    const z = Math.floor(position.z);
+    for (const height of [0.1, 1]) {
+      const id = this.world.getBlock(x, Math.floor(position.y + height), z);
+      // Skip the lookup for ordinary cubes, which are never climbable.
+      if (IS_CUBE[id] !== 1 && getBlockDef(id).climbable) return true;
+    }
+    return false;
   }
 
   private updateWaterState(): void {

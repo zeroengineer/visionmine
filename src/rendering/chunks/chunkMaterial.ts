@@ -10,12 +10,13 @@ export interface ChunkMaterials {
 }
 
 const VERTEX_PARS = /* glsl */ `
-attribute vec3 aFace; // tile index, quad width, quad height
+attribute vec4 aFace; // tile index, quad width, quad height, block light 0..1
 attribute vec4 aAo;   // corner brightness in UV order 00, 10, 01, 11
 varying vec2 vTile;
 varying vec2 vFaceUv;
 varying vec2 vQuadUv;
 varying vec4 vAoCorners;
+varying float vBlockLight;
 `;
 
 const VERTEX_MAIN = /* glsl */ `
@@ -23,6 +24,7 @@ vTile = vec2(mod(aFace.x, ${ATLAS_TILES_PER_ROW}.0), floor(aFace.x / ${ATLAS_TIL
 vFaceUv = uv * aFace.yz;
 vQuadUv = uv;
 vAoCorners = aAo;
+vBlockLight = aFace.w;
 `;
 
 const FRAGMENT_PARS = /* glsl */ `
@@ -30,6 +32,7 @@ varying vec2 vTile;
 varying vec2 vFaceUv;
 varying vec2 vQuadUv;
 varying vec4 vAoCorners;
+varying float vBlockLight;
 uniform float uTime;
 `;
 
@@ -46,6 +49,8 @@ diffuseColor *= sampledDiffuseColor;
 float aoBottom = mix(vAoCorners.x, vAoCorners.y, vQuadUv.x);
 float aoTop = mix(vAoCorners.z, vAoCorners.w, vQuadUv.x);
 diffuseColor.rgb *= mix(aoBottom, aoTop, vQuadUv.y);
+// Torchlight: a warm glow that does not depend on the sun, so it shows at night.
+totalEmissiveRadiance += diffuseColor.rgb * vBlockLight * vBlockLight * vec3(1.0, 0.82, 0.58) * 0.9;
 `;
 }
 
@@ -63,7 +68,7 @@ function patch(
       .replace('#include <common>', `#include <common>\n${FRAGMENT_PARS}`)
       .replace('#include <map_fragment>', fragmentMap(scroll));
   };
-  material.customProgramCacheKey = () => `visionmine-chunk-${scroll ? 'water' : 'solid'}`;
+  material.customProgramCacheKey = () => `visionmine-chunk-v2-${scroll ? 'water' : 'solid'}`;
 }
 
 /**

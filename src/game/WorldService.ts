@@ -1,5 +1,9 @@
 import type { GameMode } from '@/gameplay/modes/gameMode';
-import { sanitizeWorldConfig, type TerrainType } from '@/world/generation/config';
+import {
+  GENERATOR_VERSION,
+  sanitizeWorldConfig,
+  type TerrainType,
+} from '@/world/generation/config';
 import { normalizeWorldName } from '@/world/persistence/codec';
 import {
   SAVE_VERSION,
@@ -44,6 +48,7 @@ export class WorldService {
         seed: options.seed.trim(),
         terrain: options.terrain,
         treeDensity: options.treeDensity,
+        generator: GENERATOR_VERSION,
       }),
       mode: options.mode,
       createdAt: now,
@@ -86,7 +91,12 @@ export class WorldService {
     await this.repository.deletePlayer(id);
     const updated: WorldRecord = {
       ...record,
-      config: sanitizeWorldConfig({ ...record.config, seed: seed.trim() }),
+      // Brand-new terrain, so it may as well come from the current generator.
+      config: sanitizeWorldConfig({
+        ...record.config,
+        seed: seed.trim(),
+        generator: GENERATOR_VERSION,
+      }),
       timeOfDay: 0.32,
       lastPlayedAt: Date.now(),
     };

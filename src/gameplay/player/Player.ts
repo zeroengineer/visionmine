@@ -31,6 +31,8 @@ export class Player {
    * once; this starts at minus the step height and eases back to zero.
    */
   viewOffsetY = 0;
+  /** Holding on to a ladder. */
+  climbing = false;
   /** Lower body is in water. */
   inWater = false;
   /** Eyes are in water. */
