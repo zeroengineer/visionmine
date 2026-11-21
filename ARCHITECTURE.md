@@ -16,6 +16,7 @@ src/
   world/       Voxel data and rules — no Three.js, no DOM
     blocks/      Block registry, block shapes and atlas tile ids
     lighting/    Flood-fill light from torches
+    simulation/  Block ticker: falling sand and gravel, flowing water
     chunks/      Chunk storage, coordinates, ChunkManager (streaming)
     generation/  TerrainGenerator, world config, worker and worker pool
     meshing/     ChunkMesher interface and the culled-face mesher
@@ -105,6 +106,15 @@ State bits are shared across shapes: the low two bits are a direction (north, ea
 ### Block light
 
 `world/lighting/BlockLight.ts` flood-fills light from emitting blocks: a torch starts at level 14 and loses one level per block through anything not opaque. Because light reaches at most 15 blocks, a chunk and its eight neighbours hold every emitter that can affect it. Each `Chunk` keeps the set of its emitter positions (maintained by `World`), and the mesher skips the whole computation when the nine chunks hold none — the usual case. Otherwise each face takes the level of the cell it looks into, passed to the shader as a fourth component of the per-face attribute and added as a warm emissive term, so it shows regardless of the sun. Placing or removing a light, or changing an opaque block near one, marks all nine chunks for remeshing.
+
+### World simulation
+
+`world/simulation/BlockTicker.ts` makes the world move on its own. Nothing is scanned: when a block changes, it and its six neighbours are queued if a rule could apply to what is there, so still terrain costs nothing. A tick runs every six simulation steps (ten a second) and handles at most 512 queued cells; the rest wait.
+
+- **Falling** — sand and gravel (`BlockDef.falls`) move down one cell per tick while the cell below is open, sinking through water and flattening plants.
+- **Water** — the state byte is a level: 0 is a source, 1–7 is flowing water, thinner with each block from what feeds it. A flowing cell takes level 1 under other water, otherwise one more than its thickest neighbour, and disappears when nothing feeds it — which is how a stream drains after its source is removed. Water moves down when it can; only when it cannot does it spread sideways. Generated lakes and oceans are all sources, so they are stable until someone digs beside them. The mesher lowers the surface by level.
+
+Changes made by these rules carry `simulated: true` on `blockChanged`, and undo history ignores them: undo reverts what the player did, and the world then reacts to that. They are still ordinary edits as far as saving is concerned.
 
 ### Generator versions
 
