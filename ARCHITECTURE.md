@@ -14,7 +14,8 @@ src/
     audio/       Synthesised sound effects
     scene/ resources/
   world/       Voxel data and rules — no Three.js, no DOM
-    blocks/      Block registry and atlas tile ids
+    blocks/      Block registry, block shapes and atlas tile ids
+    lighting/    Flood-fill light from torches
     chunks/      Chunk storage, coordinates, ChunkManager (streaming)
     generation/  TerrainGenerator, world config, worker and worker pool
     meshing/     ChunkMesher interface and the culled-face mesher
@@ -90,6 +91,24 @@ WorldSession                                    World.addChunk ──► event: 
 - **ChunkMeshScheduler** — remeshes player edits immediately; streams new chunks under a 4 ms/frame budget and only when all eight neighbours exist, so border faces and ambient occlusion are exact.
 - **FaceMesher** — emits one quad per block face that touches a non-opaque block, with per-corner ambient occlusion. Output is a flat `FaceBatch` (`x, y, z, face, tile, ao×4, width, height`).
 - **ChunkRenderer** — writes each batch into an `InstancedMesh` whose base geometry is a single unit quad. The instance matrix encodes position, orientation and size; instanced attributes carry the atlas tile and ambient occlusion. Draw calls are at most two per visible chunk.
+
+### Block shapes
+
+A block that is not a full cube declares a `shape` (`slab`, `stairs`, `door`, `ladder`, `pane`, `post`, `cross`). `world/blocks/shapes.ts` turns a shape and the block's state byte into a list of boxes in block-local coordinates, and those same boxes are used everywhere:
+
+- **Meshing** — `FaceMesher` emits one quad per box face, sized and offset through the existing `width`/`height` and position fields, so the renderer needed no change for boxes. Plants (`cross`) are two diagonal quads drawn from both sides, which are faces 6–9 of `FACE_BASIS`.
+- **Collision** — `aabb.ts` resolves a move against the boxes a body overlaps, pushing out to the face of the box that was hit rather than to the cell boundary. Full cubes keep a fast path. Walking up a slab or a stair is the ordinary 0.6-block step-up.
+- **Targeting** — `voxelRaycast.ts` walks cells as before and, for a shaped block, intersects the ray with its boxes; the hit carries the exact point, which placement uses (which half a slab fills).
+
+State bits are shared across shapes: the low two bits are a direction (north, east, south, west), bit 2 is "upper half" for slabs and "open" for doors. A door is two blocks (`Door` and `DoorUpper`) that are placed, toggled and removed together; `gameplay/interaction/attachments.ts` enforces that, and removes plants and torches whose support goes, by listening to `World`'s `blockChanged` event — so it holds for clicks, explosions, region tools and undo alike.
+
+### Block light
+
+`world/lighting/BlockLight.ts` flood-fills light from emitting blocks: a torch starts at level 14 and loses one level per block through anything not opaque. Because light reaches at most 15 blocks, a chunk and its eight neighbours hold every emitter that can affect it. Each `Chunk` keeps the set of its emitter positions (maintained by `World`), and the mesher skips the whole computation when the nine chunks hold none — the usual case. Otherwise each face takes the level of the cell it looks into, passed to the shader as a fourth component of the per-face attribute and added as a warm emissive term, so it shows regardless of the sun. Placing or removing a light, or changing an opaque block near one, marks all nine chunks for remeshing.
+
+### Generator versions
+
+`WorldConfig.generator` records which generator version a world was created with, and a world keeps it for life, so explored terrain never changes when the generator gains features. Version 2 added flowers and tall grass (scaled by the vegetation setting); worlds saved before versions existed have none and are treated as version 1. "New Terrain" regenerates everything and so moves the world to the current version.
 
 ### Introducing greedy meshing
 

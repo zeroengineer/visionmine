@@ -60,7 +60,8 @@ The browser tests run against the production build served by `vite preview` on p
 ## Adding things
 
 - **An action** — add an entry to `ACTION_SPECS` in `src/core/input/actions.ts` (label, category, default codes that no other action uses) and react to it with `input.isActionDown(id)` or the `action` event. It appears in Settings → Controls automatically and is rebindable.
-- **A block** — add an id and definition in `src/world/blocks/blocks.ts`, tiles in `tiles.ts`, and a painter per tile in `src/rendering/textures/TileAtlas.ts`. Placeable blocks appear in the creative palette automatically.
+- **A block** — add an id and definition in `src/world/blocks/blocks.ts`, tiles in `tiles.ts`, and a painter per tile in `src/rendering/textures/TileAtlas.ts`. Placeable blocks appear in the creative palette automatically, with an icon drawn from the block's shape. For a block that is not a full cube, give it a `shape`; a new shape needs its boxes in `src/world/blocks/shapes.ts` and, if its state should depend on how it is placed, a case in `placementMeta` (`src/gameplay/interaction/placement.ts`). Set `light` for a block that glows.
+- **A generator feature** — raise `GENERATOR_VERSION` in `src/world/generation/config.ts` and guard the new code in `TerrainGenerator` with `this.version >= N`, so existing worlds are not altered.
 - **A terrain preset** — add an entry to `TERRAIN_PRESETS` in `src/world/generation/config.ts`; the Create World screen lists it automatically.
 - **A setting** — add the field, default and sanitiser in `src/state/settingsStore.ts`, a control in `src/ui/menus/SettingsScreen.ts`, and subscribe where it takes effect.
 - **A different mesher** — implement `ChunkMesher` (`src/world/meshing/types.ts`) and pass it to `ChunkMeshScheduler` in `WorldSession`.
@@ -82,19 +83,20 @@ Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Uni
 - **Unit tests** (`tests/unit`, Vitest, Node) — coordinates, terrain determinism and chunk borders, world edits and dirty propagation, face meshing, collision, raycasting, block interaction, player movement, explosions, inventory, settings, persistence (in-memory and IndexedDB through `fake-indexeddb`, including corrupt data) and chunk streaming.
 - **Browser tests** (`tests/e2e`, Playwright, production build) — drive the real UI with clicks and keys and assert on world state through `window.__visionmine`:
 
-| Spec                     | Covers                                                                                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `flow.spec.ts`           | Boot to menu, rendered backdrop, create world → loading → playing, seed determinism, cancelling the form, no console errors                                              |
-| `movement.spec.ts`       | Walking and stopping, jumping, gravity, flight, wall collision, mouse look                                                                                               |
-| `blocks.spec.ts`         | Break, place, every hotbar block, placement refused inside the player, pick block, TNT, survival consumption and timed mining                                            |
-| `inventory.spec.ts`      | Number keys and wheel, opening and closing, creative palette, moving, swapping and splitting stacks, backpack expansion, survival view                                   |
-| `pause-settings.spec.ts` | Pause freezes simulation and clock, resume, Save Now, mode switch, Save & Quit and Continue, settings applied and persisted, defaults, F3                                |
-| `persistence.spec.ts`    | Edits, player, view, flight and inventory restored after reload; save on leaving; survival state; Reset World; New Terrain; a version-1 save still loads                 |
-| `controls.spec.ts`       | Default key list, rebinding takes effect in play and survives reload, swapping on conflict, mouse ↔ key exchange, cancel, remove, reserved keys, reset                   |
-| `abilities.spec.ts`      | Sneaking on a ledge, double jump, dash, flying speed, auto-jump switched on in Settings, none of the creative abilities in survival                                      |
-| `builder.spec.ts`        | Selecting a region; fill, replace, clear, copy, rotate, paste; undo and redo by menu and by key; quick swap; hide interface; screenshot download; none of it in survival |
-| `worlds.spec.ts`         | Empty list, ordering, play, rename (and cancel), delete with confirmation, damaged save listed and deletable                                                             |
-| `performance.spec.ts`    | Chunk, geometry and texture counts while travelling 576 blocks, on returning, and after leaving and re-entering the world (Chromium only)                                |
+| Spec                     | Covers                                                                                                                                                                                                                                        |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flow.spec.ts`           | Boot to menu, rendered backdrop, create world → loading → playing, seed determinism, cancelling the form, no console errors                                                                                                                   |
+| `movement.spec.ts`       | Walking and stopping, jumping, gravity, flight, wall collision, mouse look                                                                                                                                                                    |
+| `blocks.spec.ts`         | Break, place, every hotbar block, placement refused inside the player, pick block, TNT, survival consumption and timed mining                                                                                                                 |
+| `inventory.spec.ts`      | Number keys and wheel, opening and closing, creative palette, moving, swapping and splitting stacks, backpack expansion, survival view                                                                                                        |
+| `pause-settings.spec.ts` | Pause freezes simulation and clock, resume, Save Now, mode switch, Save & Quit and Continue, settings applied and persisted, defaults, F3                                                                                                     |
+| `persistence.spec.ts`    | Edits, player, view, flight and inventory restored after reload; save on leaving; survival state; Reset World; New Terrain; a version-1 save still loads                                                                                      |
+| `controls.spec.ts`       | Default key list, rebinding takes effect in play and survives reload, swapping on conflict, mouse ↔ key exchange, cancel, remove, reserved keys, reset                                                                                        |
+| `abilities.spec.ts`      | Sneaking on a ledge, double jump, dash, flying speed, auto-jump switched on in Settings, none of the creative abilities in survival                                                                                                           |
+| `builder.spec.ts`        | Selecting a region; fill, replace, clear, copy, rotate, paste; undo and redo by menu and by key; quick swap; hide interface; screenshot download; none of it in survival                                                                      |
+| `new-blocks.spec.ts`     | Slabs (both halves, walking onto one), stairs facing, doors (two blocks, open/close, passable, removed whole, undo), ladder placement and climbing, torchlight measured on screen, support rule, palette, plants only in new-generator worlds |
+| `worlds.spec.ts`         | Empty list, ordering, play, rename (and cancel), delete with confirmation, damaged save listed and deletable                                                                                                                                  |
+| `performance.spec.ts`    | Chunk, geometry and texture counts while travelling 576 blocks, on returning, and after leaving and re-entering the world (Chromium only)                                                                                                     |
 
 Tests use real pointer lock where the browser grants it to automation (Chromium, Firefox) and the debug hook's `virtualLock()` otherwise (WebKit).
 
@@ -144,9 +146,25 @@ Resource counts from `performance.spec.ts` (render distance 3, identical in thre
 
 Counts plateau while travelling and return exactly to the starting footprint, so chunk unloading and `WorldSession.dispose()` release what they allocate. The JS heap moved between 13 and 38 MB across the run with no upward trend after garbage collection.
 
+### After Phase 17 (block shapes, light and plants)
+
+Re-measured on 2026-11-21 with the same real-GPU set-up as above (Apple M4, High preset, 1920 × 1080). Plants add about 7% more faces to the same view, and block light adds one value per face and a flood fill only around chunks that hold a torch.
+
+| Situation                            | Average | 99th percentile frame | Draw calls | Triangles | Faces (Phase 13 → now) |
+| ------------------------------------ | ------- | --------------------- | ---------- | --------- | ---------------------- |
+| Standing, 225 chunks meshed          | 60 fps  | 16.8 ms               | 255        | 234 k     | 131,045 → 139,789      |
+| Sprint-flying while chunks stream in | 60 fps  | 16.8 ms               | 254        | 177 k     | 156,093 → 166,629      |
+| Settled after the flight, 304 meshed | 60 fps  | 16.8 ms               | 174        | 109 k     | 131,884 → 141,016      |
+
+Still at the display's refresh cap in all three. `performance.spec.ts` continues to pass with the same chunk window and the same return to the starting footprint.
+
 ### Known limitations
 
 - Chunks stay loaded and meshed until they are `renderDistance + 4` chunks away (hysteresis against thrashing), so more chunks are meshed after travelling than at spawn — 57 instead of 37 at render distance 3. They are still frustum-culled. Lowering the render distance therefore frees memory only for chunks beyond the new distance + 4.
 - The "queued" figure in the F3 overlay counts every loaded chunk that has no mesh, including the outer ring that is loaded only to give its neighbours correct borders. It does not fall to zero when streaming is finished.
 - When frames take longer than about 83 ms the simulation runs slower than real time (at most five 1/60 s steps per frame) instead of trying to catch up.
+- Shaped blocks get a flat shade instead of per-corner ambient occlusion, and their side textures are cropped from the tile's lower-left corner rather than re-centred.
+- A slab cannot be combined with a second slab into a full block, stairs have no upside-down form, and glass panes do not join their neighbours automatically; a pane runs along one axis chosen when it is placed.
+- Torches stand on the floor only. Light is per face with no smoothing, and it does not light the player model, particles or weather.
+- An open door that swings into the space the player occupies is not blocked from doing so.
 - Firefox and WebKit were tested through Playwright's builds on macOS only. Safari, mobile browsers and touch input were not tested; the game requires a keyboard and mouse.
