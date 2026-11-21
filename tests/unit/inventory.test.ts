@@ -34,8 +34,8 @@ describe('inventory model', () => {
     let inv = createInventory();
     inv = addItem(inv, BlockId.Stone, 10).inventory;
     inv = addItem(inv, BlockId.Stone, 60).inventory;
-    expect(inv.slots[0]).toEqual({ block: BlockId.Stone, count: MAX_STACK });
-    expect(inv.slots[1]).toEqual({ block: BlockId.Stone, count: 6 });
+    expect(inv.slots[0]).toEqual({ item: BlockId.Stone, count: MAX_STACK });
+    expect(inv.slots[1]).toEqual({ item: BlockId.Stone, count: 6 });
     expect(countOf(inv, BlockId.Stone)).toBe(70);
 
     const full = addItem(createInventory(), BlockId.Dirt, 36 * MAX_STACK + 5);
@@ -53,8 +53,8 @@ describe('inventory model', () => {
   it('removes items and clears empty slots without mutating the original', () => {
     const inv = addItem(createInventory(), BlockId.Glass, 3).inventory;
     const after = removeFromSlot(inv, 0, 2);
-    expect(after.slots[0]).toEqual({ block: BlockId.Glass, count: 1 });
-    expect(inv.slots[0]).toEqual({ block: BlockId.Glass, count: 3 });
+    expect(after.slots[0]).toEqual({ item: BlockId.Glass, count: 1 });
+    expect(inv.slots[0]).toEqual({ item: BlockId.Glass, count: 3 });
     expect(removeFromSlot(after, 0, 1).slots[0]).toBeNull();
     expect(removeFromSlot(after, 5, 1)).toBe(after);
   });
@@ -68,41 +68,41 @@ describe('inventory model', () => {
     expect(cycleSelection(selectSlot(inv, 8), 1).selected).toBe(0);
     expect(cycleSelection(selectSlot(inv, 0), -1).selected).toBe(HOTBAR_SIZE - 1);
     const held = addItem(selectSlot(createInventory(), 0), BlockId.Brick, 2).inventory;
-    expect(selectedStack(held)).toEqual({ block: BlockId.Brick, count: 2 });
+    expect(selectedStack(held)).toEqual({ item: BlockId.Brick, count: 2 });
   });
 
   it('moves, merges, swaps and splits stacks with the pointer', () => {
     let inv = addItem(createInventory(), BlockId.Stone, 10).inventory;
     inv = {
       ...inv,
-      slots: inv.slots.map((s, i) => (i === 1 ? { block: BlockId.Dirt, count: 4 } : s)),
+      slots: inv.slots.map((s, i) => (i === 1 ? { item: BlockId.Dirt, count: 4 } : s)),
     };
 
     // Pick up, then put down in an empty slot.
     let step = clickSlot(inv, null, 0);
-    expect(step.cursor).toEqual({ block: BlockId.Stone, count: 10 });
+    expect(step.cursor).toEqual({ item: BlockId.Stone, count: 10 });
     expect(step.inventory.slots[0]).toBeNull();
     step = clickSlot(step.inventory, step.cursor, 20);
     expect(step.cursor).toBeNull();
-    expect(step.inventory.slots[20]).toEqual({ block: BlockId.Stone, count: 10 });
+    expect(step.inventory.slots[20]).toEqual({ item: BlockId.Stone, count: 10 });
 
     // Swap with a different item.
-    step = clickSlot(step.inventory, { block: BlockId.Glass, count: 2 }, 1);
-    expect(step.cursor).toEqual({ block: BlockId.Dirt, count: 4 });
-    expect(step.inventory.slots[1]).toEqual({ block: BlockId.Glass, count: 2 });
+    step = clickSlot(step.inventory, { item: BlockId.Glass, count: 2 }, 1);
+    expect(step.cursor).toEqual({ item: BlockId.Dirt, count: 4 });
+    expect(step.inventory.slots[1]).toEqual({ item: BlockId.Glass, count: 2 });
 
     // Merge respects the stack limit.
     const nearlyFull = addItem(createInventory(), BlockId.Stone, 60).inventory;
-    const merged = clickSlot(nearlyFull, { block: BlockId.Stone, count: 10 }, 0);
+    const merged = clickSlot(nearlyFull, { item: BlockId.Stone, count: 10 }, 0);
     expect(merged.inventory.slots[0]?.count).toBe(MAX_STACK);
-    expect(merged.cursor).toEqual({ block: BlockId.Stone, count: 6 });
+    expect(merged.cursor).toEqual({ item: BlockId.Stone, count: 6 });
 
     // Secondary click: take half, drop one.
     const half = clickSlot(nearlyFull, null, 0, true);
     expect(half.cursor?.count).toBe(30);
     expect(half.inventory.slots[0]?.count).toBe(30);
-    const one = clickSlot(createInventory(), { block: BlockId.Log, count: 5 }, 3, true);
-    expect(one.inventory.slots[3]).toEqual({ block: BlockId.Log, count: 1 });
+    const one = clickSlot(createInventory(), { item: BlockId.Log, count: 5 }, 3, true);
+    expect(one.inventory.slots[3]).toEqual({ item: BlockId.Log, count: 1 });
     expect(one.cursor?.count).toBe(4);
   });
 
@@ -121,10 +121,10 @@ describe('inventory model', () => {
 
   it('picks blocks: selects an existing hotbar stack or replaces the held slot', () => {
     const inv = starterInventory('creative');
-    const stoneIndex = inv.slots.findIndex((s) => s?.block === BlockId.Stone);
+    const stoneIndex = inv.slots.findIndex((s) => s?.item === BlockId.Stone);
     expect(pickBlock(inv, BlockId.Stone).selected).toBe(stoneIndex);
     const picked = pickBlock(selectSlot(inv, 2), BlockId.Snow);
-    expect(picked.slots[2]).toEqual({ block: BlockId.Snow, count: MAX_STACK });
+    expect(picked.slots[2]).toEqual({ item: BlockId.Snow, count: MAX_STACK });
     expect(pickBlock(inv, BlockId.Bedrock)).toBe(inv);
   });
 
@@ -143,17 +143,17 @@ describe('inventory model', () => {
     const clean = sanitizeInventory({
       selected: 42,
       slots: [
-        { block: BlockId.Stone, count: 500 },
+        { item: BlockId.Stone, count: 500 },
         { block: 999, count: 3 },
-        { block: BlockId.Dirt, count: -2 },
+        { item: BlockId.Dirt, count: -2 },
         'junk',
         null,
-        { block: BlockId.Bedrock, count: 1 },
+        { item: BlockId.Bedrock, count: 1 },
       ],
     });
     expect(clean.selected).toBe(0);
     expect(clean.slots).toHaveLength(36);
-    expect(clean.slots[0]).toEqual({ block: BlockId.Stone, count: MAX_STACK });
+    expect(clean.slots[0]).toEqual({ item: BlockId.Stone, count: MAX_STACK });
     expect(clean.slots.slice(1).every((s) => s === null)).toBe(true);
     expect(sanitizeInventory(null).slots).toHaveLength(36);
     expect(sanitizeInventory({ slots: new Array(54).fill(null) }).slots).toHaveLength(54);
@@ -167,7 +167,7 @@ describe('inventory store', () => {
     store.load(createInventory());
     expect(store.add(BlockId.Planks, 3)).toBe(0);
     inventoryStore.getState().consumeSelected();
-    expect(inventoryStore.getState().slots[0]).toEqual({ block: BlockId.Planks, count: 2 });
+    expect(inventoryStore.getState().slots[0]).toEqual({ item: BlockId.Planks, count: 2 });
     inventoryStore.getState().consumeSelected(2);
     expect(inventoryStore.getState().slots[0]).toBeNull();
 
@@ -182,10 +182,10 @@ describe('inventory store', () => {
   it('carries palette stacks on the pointer and returns them on close', () => {
     inventoryStore.getState().load(createInventory());
     inventoryStore.getState().grab(BlockId.Brick);
-    expect(inventoryStore.getState().cursor).toEqual({ block: BlockId.Brick, count: MAX_STACK });
+    expect(inventoryStore.getState().cursor).toEqual({ item: BlockId.Brick, count: MAX_STACK });
     inventoryStore.getState().click(12);
     expect(inventoryStore.getState().cursor).toBeNull();
-    expect(inventoryStore.getState().slots[12]?.block).toBe(BlockId.Brick);
+    expect(inventoryStore.getState().slots[12]?.item).toBe(BlockId.Brick);
     inventoryStore.getState().grab(BlockId.Glass);
     inventoryStore.getState().dropCursor();
     expect(inventoryStore.getState().cursor).toBeNull();

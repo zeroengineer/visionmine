@@ -32,6 +32,7 @@ Phases 1–13 (the original build and its validation) were completed on 2026-11-
 | 17a   | `feature/block-state`        | `feat(world): add per-block state and save format 2`                            |
 | 17b   | `feature/new-blocks`         | `feat(blocks): shapes, slabs, stairs, doors, ladders, panes, torches, plants`   |
 | 18    | `feature/world-simulation`   | `feat(simulation): add falling sand and gravel and flowing water`               |
+| 19    | `feature/survival`           | `feat(survival): items, tools, ores, vitals, crafting`                          |
 
 What was built, in short: Vite + TypeScript + Three.js project; chunked voxel world (16×128×16) rendered as instanced faces; seeded simplex-noise terrain with four presets, biomes, water and trees; worker-pool chunk generation with streaming and unloading; first-person controller with custom AABB collision, sprint, swim and flight; DDA raycast block breaking/placing/picking; hotbar and expandable inventory with creative and survival rules; day/night sky, sun/moon light, shadows, fog, rain/snow, debris particles, synthesised sounds; IndexedDB saves (edits, player, inventory, seed, mode, time) with create/rename/delete/reset/regenerate and corrupt-save handling; main menu, create-world, world list, loading, pause, settings and HUD; third-person camera; TNT with chain reactions. README, ARCHITECTURE and DEVELOPMENT are written.
 
@@ -56,16 +57,16 @@ Full details, tables and measurements are in `DEVELOPMENT.md` under "Testing".
 
 ## Roadmap (Phases 14–20)
 
-| Phase | Scope                                                                                         | Status  |
-| ----- | --------------------------------------------------------------------------------------------- | ------- |
-| 14    | Action map; rebindable controls in Settings → Controls                                        | done    |
-| 15    | Movement abilities: sneak, step-up, double jump, air dash, fly speed, sprint toggle           | done    |
-| 16    | Builder tools: undo/redo, selection fill/replace/copy/paste, quick swap, screenshot, hide HUD | done    |
-| 17a   | Per-block state byte; save format 2 with migration of version-1 saves                         | done    |
-| 17b   | Block shapes; slabs, stairs, doors, ladders, panes, plants, torches and block light           | done    |
-| 18    | World simulation: falling sand and gravel, flowing water                                      | done    |
-| 19    | Survival: items, health, hunger, tools, ores, crafting                                        | next    |
-| 20    | Full cross-browser validation and performance comparison                                      | planned |
+| Phase | Scope                                                                                         | Status |
+| ----- | --------------------------------------------------------------------------------------------- | ------ |
+| 14    | Action map; rebindable controls in Settings → Controls                                        | done   |
+| 15    | Movement abilities: sneak, step-up, double jump, air dash, fly speed, sprint toggle           | done   |
+| 16    | Builder tools: undo/redo, selection fill/replace/copy/paste, quick swap, screenshot, hide HUD | done   |
+| 17a   | Per-block state byte; save format 2 with migration of version-1 saves                         | done   |
+| 17b   | Block shapes; slabs, stairs, doors, ladders, panes, plants, torches and block light           | done   |
+| 18    | World simulation: falling sand and gravel, flowing water                                      | done   |
+| 19    | Survival: items, health, hunger, tools, ores, crafting                                        | done   |
+| 20    | Full cross-browser validation and performance comparison                                      | next   |
 
 From Phase 14 on, unit and browser tests are written in the same phase as the feature.
 

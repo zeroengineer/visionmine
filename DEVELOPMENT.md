@@ -61,6 +61,8 @@ The browser tests run against the production build served by `vite preview` on p
 
 - **An action** — add an entry to `ACTION_SPECS` in `src/core/input/actions.ts` (label, category, default codes that no other action uses) and react to it with `input.isActionDown(id)` or the `action` event. It appears in Settings → Controls automatically and is rebindable.
 - **A block** — add an id and definition in `src/world/blocks/blocks.ts`, tiles in `tiles.ts`, and a painter per tile in `src/rendering/textures/TileAtlas.ts`. Placeable blocks appear in the creative palette automatically, with an icon drawn from the block's shape. For a block that is not a full cube, give it a `shape`; a new shape needs its boxes in `src/world/blocks/shapes.ts` and, if its state should depend on how it is placed, a case in `placementMeta` (`src/gameplay/interaction/placement.ts`). Set `light` for a block that glows.
+- **An item** — add an id to `ItemId` and a definition in `src/gameplay/items/items.ts`, a sprite tile in `tiles.ts` and its pixel map in `TileAtlas.ts`. It appears in the creative palette automatically.
+- **A recipe** — add an entry to `RECIPES` in `src/gameplay/crafting/recipes.ts`: the pattern trimmed to its ingredients, the key, and the result. A unit test checks that no two recipes share a layout.
 - **A generator feature** — raise `GENERATOR_VERSION` in `src/world/generation/config.ts` and guard the new code in `TerrainGenerator` with `this.version >= N`, so existing worlds are not altered.
 - **A terrain preset** — add an entry to `TERRAIN_PRESETS` in `src/world/generation/config.ts`; the Create World screen lists it automatically.
 - **A setting** — add the field, default and sanitiser in `src/state/settingsStore.ts`, a control in `src/ui/menus/SettingsScreen.ts`, and subscribe where it takes effect.
@@ -96,6 +98,7 @@ Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Uni
 | `builder.spec.ts`        | Selecting a region; fill, replace, clear, copy, rotate, paste; undo and redo by menu and by key; quick swap; hide interface; screenshot download; none of it in survival                                                                      |
 | `new-blocks.spec.ts`     | Slabs (both halves, walking onto one), stairs facing, doors (two blocks, open/close, passable, removed whole, undo), ladder placement and climbing, torchlight measured on screen, support rule, palette, plants only in new-generator worlds |
 | `simulation.spec.ts`     | Sand falling from mid-air and when undermined; water spreading to level 7 and no further, draining when plugged, and surviving a reload                                                                                                       |
+| `survival.spec.ts`       | Vitals display, fall damage, death and respawn, eating, ore drops, tool wear, crafting in the inventory and at a table, ingredients returned on close, vitals and tool wear saved, no vitals in creative, ore present in new worlds           |
 | `worlds.spec.ts`         | Empty list, ordering, play, rename (and cancel), delete with confirmation, damaged save listed and deletable                                                                                                                                  |
 | `performance.spec.ts`    | Chunk, geometry and texture counts while travelling 576 blocks, on returning, and after leaving and re-entering the world (Chromium only)                                                                                                     |
 
@@ -119,6 +122,7 @@ The WebKit mouse-look test is skipped because Playwright's WebKit does not grant
 
 - **One simulated frame ran after pausing.** The fixed-step simulation runs before the per-frame update that applied the paused flag, so a falling player moved a little further after Escape. The pause state is now applied before each simulation step (`Game.syncFrozen`).
 - **View could jerk when the mouse was captured.** Firefox reports a stale movement delta on the first mouse event after pointer lock is granted. `InputManager` now discards the first movement sample after each capture.
+- **The last step of a fall was not counted** (found in Phase 19). Fall distance left out the simulation step in which the player lands, so a ten-block fall measured 9.93 and cost one point of damage too few.
 - **Quick key taps could be missed** (found in Phase 15). Presses were only polled once per simulation step, so a key pressed and released between two steps did nothing. `InputManager` now queues presses until the simulation consumes them.
 - **A mouse press on the game view could be lost** (found in Phase 16, about 1 in 25 first clicks on WebKit). WebKit sometimes reports the page root, not the canvas, as the target of a press on the game view, and the game listened on the canvas only. Mouse input is now accepted on the canvas or on the bare page behind the interface.
 
@@ -171,4 +175,7 @@ Still at the display's refresh cap in all three. `performance.spec.ts` continues
 - Sand falls a block at a time with no falling animation, and a block that lands on the player does not push them out of the way.
 - Water has no infinite-source rule (two sources do not create a third), does not push the player, and the step between two water levels shows as a small ledge.
 - Simulation only starts from a change: sand generated over a cave stays up until something next to it changes, and a stream cut off by leaving the area resumes only when disturbed.
+- Survival has no hostile creatures, so damage comes only from falls, drowning and explosions; starvation stops at one health.
+- Every block can be mined by hand and drops itself; tools change speed only. There is no furnace: iron ore yields usable iron directly, and glass cannot be made in survival.
+- Dying keeps the inventory and there is no death screen, only a message.
 - Firefox and WebKit were tested through Playwright's builds on macOS only. Safari, mobile browsers and touch input were not tested; the game requires a keyboard and mouse.

@@ -35,9 +35,15 @@ export const BlockId = {
   FlowerRed: 29,
   FlowerYellow: 30,
   TallGrass: 31,
+  CoalOre: 32,
+  IronOre: 33,
+  CraftingTable: 34,
 } as const;
 
 export type BlockId = (typeof BlockId)[keyof typeof BlockId];
+
+/** Kind of tool that mines a block quickly. */
+export type ToolKind = 'pickaxe' | 'axe' | 'shovel';
 
 /** Face order used everywhere: +X, -X, +Y, -Y, +Z, -Z. */
 export const Face = { PX: 0, NX: 1, PY: 2, NY: 3, PZ: 4, NZ: 5 } as const;
@@ -66,6 +72,13 @@ export interface BlockDef {
   readonly light: number;
   /** Can be climbed like a ladder. */
   readonly climbable: boolean;
+  /** Tool that mines this block faster than a bare hand, if any. */
+  readonly tool: ToolKind | null;
+  /**
+   * Item id and count received for mining this block in survival, when that is
+   * not simply the block itself (ore gives its mineral).
+   */
+  readonly drop: { readonly item: number; readonly count: number } | null;
   /** Drops when nothing is underneath (sand, gravel). */
   readonly falls: boolean;
   /** Breaks when the block underneath is removed (plants, torches). */
@@ -105,6 +118,8 @@ function def(
     placeable: true,
     light: 0,
     climbable: false,
+    tool: null,
+    drop: null,
     falls: false,
     needsSupport: false,
     item: id,
@@ -131,10 +146,11 @@ export const BLOCKS: readonly BlockDef[] = [
     { top: Tile.GrassTop, side: Tile.GrassSide, bottom: Tile.Dirt },
     0x6aa84a,
     0.6,
+    { tool: 'shovel' },
   ),
-  def(BlockId.Dirt, 'dirt', 'Dirt', Tile.Dirt, 0x8a5a36, 0.5),
-  def(BlockId.Stone, 'stone', 'Stone', Tile.Stone, 0x8b8f94, 1.5),
-  def(BlockId.Sand, 'sand', 'Sand', Tile.Sand, 0xe2d39a, 0.5, { falls: true }),
+  def(BlockId.Dirt, 'dirt', 'Dirt', Tile.Dirt, 0x8a5a36, 0.5, { tool: 'shovel' }),
+  def(BlockId.Stone, 'stone', 'Stone', Tile.Stone, 0x8b8f94, 1.5, { tool: 'pickaxe' }),
+  def(BlockId.Sand, 'sand', 'Sand', Tile.Sand, 0xe2d39a, 0.5, { falls: true, tool: 'shovel' }),
   def(BlockId.Water, 'water', 'Water', Tile.Water, 0x3f7fd6, 0, {
     solid: false,
     opaque: false,
@@ -149,14 +165,20 @@ export const BLOCKS: readonly BlockDef[] = [
     { top: Tile.LogTop, side: Tile.LogSide, bottom: Tile.LogTop },
     0x6e4f2e,
     1.2,
+    { tool: 'axe' },
   ),
   def(BlockId.Leaves, 'leaves', 'Leaves', Tile.Leaves, 0x3f8a2e, 0.25, { opaque: false }),
-  def(BlockId.Planks, 'planks', 'Planks', Tile.Planks, 0xb98d55, 1.0),
-  def(BlockId.Cobblestone, 'cobblestone', 'Cobblestone', Tile.Cobblestone, 0x7c7f83, 1.6),
+  def(BlockId.Planks, 'planks', 'Planks', Tile.Planks, 0xb98d55, 1.0, { tool: 'axe' }),
+  def(BlockId.Cobblestone, 'cobblestone', 'Cobblestone', Tile.Cobblestone, 0x7c7f83, 1.6, {
+    tool: 'pickaxe',
+  }),
   def(BlockId.Glass, 'glass', 'Glass', Tile.Glass, 0xcfeaf5, 0.3, { opaque: false }),
-  def(BlockId.Brick, 'brick', 'Bricks', Tile.Brick, 0xa5503f, 1.8),
-  def(BlockId.Snow, 'snow', 'Snow', Tile.Snow, 0xf2f6fa, 0.4),
-  def(BlockId.Gravel, 'gravel', 'Gravel', Tile.Gravel, 0x8a8683, 0.6, { falls: true }),
+  def(BlockId.Brick, 'brick', 'Bricks', Tile.Brick, 0xa5503f, 1.8, { tool: 'pickaxe' }),
+  def(BlockId.Snow, 'snow', 'Snow', Tile.Snow, 0xf2f6fa, 0.4, { tool: 'shovel' }),
+  def(BlockId.Gravel, 'gravel', 'Gravel', Tile.Gravel, 0x8a8683, 0.6, {
+    falls: true,
+    tool: 'shovel',
+  }),
   def(
     BlockId.Tnt,
     'tnt',
@@ -186,18 +208,21 @@ export const BLOCKS: readonly BlockDef[] = [
   def(BlockId.Door, 'door', 'Door', Tile.DoorBottom, 0x9a7446, 0.8, {
     shape: 'door',
     opaque: false,
+    tool: 'axe',
   }),
   def(BlockId.DoorUpper, 'door_upper', 'Door', Tile.DoorTop, 0x9a7446, 0.8, {
     shape: 'door',
     opaque: false,
     placeable: false,
     item: BlockId.Door,
+    tool: 'axe',
   }),
   def(BlockId.Ladder, 'ladder', 'Ladder', Tile.Ladder, 0x9a7446, 0.4, {
     shape: 'ladder',
     solid: false,
     opaque: false,
     climbable: true,
+    tool: 'axe',
   }),
   def(BlockId.GlassPane, 'glass_pane', 'Glass Pane', Tile.Glass, 0xcfeaf5, 0.3, {
     shape: 'pane',
@@ -215,6 +240,24 @@ export const BLOCKS: readonly BlockDef[] = [
   plant(BlockId.FlowerRed, 'flower_red', 'Poppy', Tile.FlowerRed, 0xd8342c),
   plant(BlockId.FlowerYellow, 'flower_yellow', 'Dandelion', Tile.FlowerYellow, 0xf2d024),
   plant(BlockId.TallGrass, 'tall_grass', 'Tall Grass', Tile.TallGrass, 0x6aaa3a),
+  // Item ids 257 and 258 are coal and iron (see gameplay/items).
+  def(BlockId.CoalOre, 'coal_ore', 'Coal Ore', Tile.CoalOre, 0x3a3a3f, 2.2, {
+    tool: 'pickaxe',
+    drop: { item: 257, count: 1 },
+  }),
+  def(BlockId.IronOre, 'iron_ore', 'Iron Ore', Tile.IronOre, 0xc9a37f, 2.8, {
+    tool: 'pickaxe',
+    drop: { item: 258, count: 1 },
+  }),
+  def(
+    BlockId.CraftingTable,
+    'crafting_table',
+    'Crafting Table',
+    { top: Tile.CraftingTop, side: Tile.CraftingSide, bottom: Tile.Planks },
+    0xb98d55,
+    1.2,
+    { tool: 'axe' },
+  ),
 ];
 
 function plant(id: BlockId, key: string, name: string, tile: Tile, color: number): BlockDef {

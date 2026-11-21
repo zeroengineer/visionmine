@@ -43,7 +43,16 @@ export interface DebugApi {
   } | null;
   look(yaw: number, pitch: number): void;
   teleport(x: number, y: number, z: number): void;
-  inventory(): { selected: number; slots: Array<{ block: number; count: number } | null> };
+  inventory(): {
+    selected: number;
+    slots: Array<{ item: number; count: number; durability?: number } | null>;
+  };
+  /** Survival health, hunger (0–20) and breath in seconds; null outside a world. */
+  vitals(): { health: number; hunger: number; air: number } | null;
+  /** Sets health and hunger directly (test set-up only). */
+  setVitals(health: number, hunger: number): void;
+  /** Adds items to the inventory; returns how many did not fit. */
+  give(item: number, count?: number): number;
   stats(): DebugInfo | null;
   /** Makes gameplay input live without real pointer lock (headless browsers). */
   virtualLock(locked: boolean): void;
@@ -95,6 +104,19 @@ export function installDebugHook(game: Game): void {
     setBlock: (x, y, z, block, meta = 0) =>
       playing()?.world.setBlock(Math.floor(x), Math.floor(y), Math.floor(z), block, meta) ?? false,
     hold: (block) => inventoryStore.getState().pick(block),
+    give: (item, count = 1) => inventoryStore.getState().add(item, count),
+    vitals() {
+      const session = playing();
+      if (!session) return null;
+      const { health, hunger, air } = session.vitals;
+      return { health, hunger, air };
+    },
+    setVitals(health, hunger) {
+      const session = playing();
+      if (!session) return;
+      session.vitals.health = health;
+      session.vitals.hunger = hunger;
+    },
     target() {
       const session = playing();
       if (!session) return null;

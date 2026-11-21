@@ -1,6 +1,6 @@
 import type { BuildAction } from '@/gameplay/building/BuildTools';
 import { MAX_REGION_BLOCKS } from '@/gameplay/building/regionOps';
-import { selectedStack } from '@/gameplay/inventory/inventory';
+import { selectedBlock } from '@/gameplay/inventory/inventory';
 import { primaryKeyLabel } from '@/core/input/actions';
 import { buildStore } from '@/state/buildStore';
 import { inventoryStore } from '@/state/inventoryStore';
@@ -106,8 +106,9 @@ export function createBuildMenu(commands: GameCommands): View {
     } else {
       selectionInfo.textContent = `No selection. Look at a block and press ${cornerKey} to mark a corner.`;
     }
-    const held = selectedStack(inventoryStore.getState());
-    heldInfo.textContent = held ? `Holding: ${getBlockDef(held.block).name}` : 'Holding: nothing';
+    // Only blocks can be built with; a tool in the hand counts as nothing.
+    const held = selectedBlock(inventoryStore.getState());
+    heldInfo.textContent = held ? `Holding: ${getBlockDef(held).name}` : 'Holding: no block';
     clipboardInfo.textContent = state.clipboard
       ? `Copy: ${state.clipboard.sx} × ${state.clipboard.sy} × ${state.clipboard.sz}`
       : 'Copy: empty';

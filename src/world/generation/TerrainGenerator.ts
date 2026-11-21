@@ -30,6 +30,10 @@ const TREE_CELL = 4;
 /** Leaves reach this far from the trunk; chunks look this far past their border. */
 const TREE_RADIUS = 2;
 const MAX_TERRAIN_HEIGHT = CHUNK_HEIGHT - 12;
+/** Share of 2 × 2 × 2 stone pockets that are ore. */
+const COAL_CHANCE = 0.03;
+const IRON_CHANCE = 0.012;
+const IRON_MAX_Y = 44;
 
 function fbm(
   noise: NoiseFunction2D,
@@ -183,7 +187,10 @@ export class TerrainGenerator {
         const height = column.height;
         const fillerStart = height - 3;
         blocks[base] = BlockId.Bedrock;
-        for (let y = 1; y < fillerStart; y++) blocks[base + y * 256] = BlockId.Stone;
+        const ores = this.version >= 3;
+        for (let y = 1; y < fillerStart; y++) {
+          blocks[base + y * 256] = ores ? this.stoneOrOre(x0 + lx, y, z0 + lz) : BlockId.Stone;
+        }
         for (let y = Math.max(1, fillerStart); y < height; y++)
           blocks[base + y * 256] = column.filler;
         blocks[base + height * 256] = column.surface;
@@ -226,6 +233,22 @@ export class TerrainGenerator {
       }
     }
     return best ?? { x: 0.5, y: SEA_LEVEL + 2, z: 0.5 };
+  }
+
+  /**
+   * Stone, or ore where a pocket lies. Pockets are 2 × 2 × 2 cells picked by a
+   * hash of their position, so they are identical however the chunk is reached.
+   */
+  private stoneOrOre(x: number, y: number, z: number): number {
+    if (hash3(this.seed ^ 0x51ab, x >> 1, y >> 1, z >> 1) < COAL_CHANCE) return BlockId.CoalOre;
+    // Iron is rarer and found only deeper down; offset so its pockets do not line up with coal.
+    if (
+      y < IRON_MAX_Y &&
+      hash3(this.seed ^ 0x77c3, (x + 1) >> 1, (y + 1) >> 1, (z + 1) >> 1) < IRON_CHANCE
+    ) {
+      return BlockId.IronOre;
+    }
+    return BlockId.Stone;
   }
 
   /** Flower or grass tuft growing on this column's surface, or 0. */

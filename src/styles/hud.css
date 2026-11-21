@@ -38,6 +38,23 @@
   pointer-events: none;
 }
 
+.slot__wear {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 4px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.slot__wear-fill {
+  display: block;
+  height: 100%;
+}
+
 .slot__key {
   position: absolute;
   left: 4px;
@@ -121,6 +138,106 @@
 
 .hotbar__label.is-visible {
   opacity: 1;
+}
+
+.inv__craft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.inv__craft-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.inv__craft-grid .slot[hidden] {
+  display: none;
+}
+
+.inv__craft-arrow {
+  font-size: 22px;
+  color: var(--muted);
+}
+
+.slot--result {
+  border-color: rgba(141, 220, 79, 0.45);
+}
+
+/* ---- Vitals --------------------------------------------------------------- */
+.vitals {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+}
+
+.vitals__row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.vital {
+  display: flex;
+  gap: 2px;
+}
+
+.vital--air {
+  justify-content: flex-end;
+}
+
+.vital[hidden] {
+  display: none;
+}
+
+.vital__pip {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: rgba(8, 11, 16, 0.75);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.vital__pip--health {
+  --pip: #e5484d;
+  border-radius: 7px 7px 3px 3px;
+}
+
+.vital__pip--hunger {
+  --pip: #d99a45;
+}
+
+.vital__pip--air {
+  --pip: #7cc4ff;
+  border-radius: 50%;
+}
+
+.vital__pip.is-full {
+  background: var(--pip);
+}
+
+.vital__pip.is-half {
+  background: linear-gradient(90deg, var(--pip) 50%, rgba(8, 11, 16, 0.75) 50%);
+}
+
+.hud__hurt {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(200, 20, 20, 0) 45%, rgba(200, 20, 20, 0.55));
+  opacity: 0;
+  pointer-events: none !important;
+}
+
+.hud__hurt.is-active {
+  animation: hurt-fade 480ms ease-out;
+}
+
+@keyframes hurt-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 /* ---- Overlays and panels -------------------------------------------------- */
@@ -322,6 +439,13 @@
 
 .inv__grid {
   margin-top: 8px;
+}
+
+/* The palette is long; show three rows and scroll the rest. */
+.inv__palette {
+  max-height: 172px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .inv__hint {

@@ -11,6 +11,13 @@ import { createRaycastHit, raycastVoxels, type RaycastHit } from './voxelRaycast
 export interface InteractionRules {
   /** Blocks break on click instead of after `hardness` seconds. */
   instantBreak(): boolean;
+  /** How many times faster than by hand the held item mines this block (1 = bare hand). */
+  miningSpeed?(block: number): number;
+  /**
+   * Right-click with the held item itself (eating, for instance), tried before
+   * anything is placed. Return true when the item was used.
+   */
+  useItem?(): boolean;
   /** Block the player would place, or 0 when the hand is empty. */
   selectedBlock(): number;
   /** Called after the selected block was placed. */
@@ -164,7 +171,7 @@ export class BlockInteraction {
     if (!this.world.setBlock(x, y, z, BlockId.Air)) return false;
     this.breakProgress = 0;
     this.events.emit('broken', { x, y, z, block });
-    // The upper half of a door yields the door, not itself.
+    // The upper half of a door counts as the door, not as itself.
     this.rules.onBroken(getBlockDef(block).item);
     this.retarget();
     return true;
@@ -172,8 +179,10 @@ export class BlockInteraction {
 
   /** Places the selected block against the targeted face. Returns true on success. */
   tryPlace(): boolean {
+    // Using the block under the crosshair comes first, then the held item, then placing.
+    if (this.hasTarget && this.rules.onUse(this.hit)) return true;
+    if (this.rules.useItem?.()) return true;
     if (!this.hasTarget) return false;
-    if (this.rules.onUse(this.hit)) return true;
     const block = this.rules.selectedBlock();
     const plan = planPlacement(block, this.hit, this.player.yaw);
     if (!plan) return false;
@@ -210,7 +219,8 @@ export class BlockInteraction {
       this.breakProgress = 0;
       return;
     }
-    this.breakProgress += dt / Math.max(0.05, def.hardness);
+    const speed = this.rules.miningSpeed?.(block) ?? 1;
+    this.breakProgress += (dt * speed) / Math.max(0.05, def.hardness);
     if (this.breakProgress >= 1) this.breakTarget();
   }
 }

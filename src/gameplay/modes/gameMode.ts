@@ -13,6 +13,8 @@ export interface GameModeRules {
   canDash: boolean;
   /** Selection tools, copy/paste and undo. */
   buildTools: boolean;
+  /** Health, hunger, fall damage and drowning apply. */
+  vitals: boolean;
 }
 
 export const GAME_MODES: Record<GameMode, GameModeRules> = {
@@ -25,6 +27,7 @@ export const GAME_MODES: Record<GameMode, GameModeRules> = {
     airJumps: 1,
     canDash: true,
     buildTools: true,
+    vitals: false,
   },
   survival: {
     label: 'Survival',
@@ -35,6 +38,7 @@ export const GAME_MODES: Record<GameMode, GameModeRules> = {
     airJumps: 0,
     canDash: false,
     buildTools: false,
+    vitals: true,
   },
 };
 

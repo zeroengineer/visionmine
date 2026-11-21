@@ -275,7 +275,8 @@ test.describe('shaped blocks', () => {
   }) => {
     await page.keyboard.press('KeyE');
     await waitForScreen(page, 'inventory');
-    await expect(page.locator('.slot--palette')).toHaveCount(29);
+    // 32 placeable blocks and 13 other items.
+    await expect(page.locator('.slot--palette')).toHaveCount(45);
     for (const name of [
       'Stone Slab',
       'Brick Stairs',
@@ -297,7 +298,7 @@ test.describe('shaped blocks', () => {
     await page.mouse.up();
     await expect
       .poll(async () => (await game.inventory(page)).slots[0])
-      .toEqual({ block: Block.Torch, count: 64 });
+      .toEqual({ item: Block.Torch, count: 64 });
   });
 });
 

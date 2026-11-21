@@ -14,8 +14,8 @@ export interface WorldConfig {
   generator?: number;
 }
 
-/** Version given to new worlds. 2 added flowers and tall grass. */
-export const GENERATOR_VERSION = 2;
+/** Version given to new worlds. 2 added flowers and tall grass; 3 added coal and iron ore. */
+export const GENERATOR_VERSION = 3;
 
 export interface TerrainPreset {
   label: string;

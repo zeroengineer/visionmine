@@ -15,6 +15,7 @@ export function createHud(commands: GameCommands): View {
   const debug = createDebugOverlay(commands);
   const crosshair = createCrosshair();
   const modeBadge = h('div', { class: 'hud__mode' });
+  const hurtFlash = h('div', { class: 'hud__hurt', attrs: { 'aria-hidden': 'true' } });
   const notice = h('div', { class: 'hud__notice', attrs: { 'data-testid': 'hud-notice' } });
   let noticeTimer = 0;
   const showNotice = (text: string): void => {
@@ -34,6 +35,7 @@ export function createHud(commands: GameCommands): View {
     'div',
     { class: 'hud', attrs: { 'data-testid': 'hud' } },
     underwater.el,
+    hurtFlash,
     crosshair,
     modeBadge,
     notice,
@@ -60,6 +62,15 @@ export function createHud(commands: GameCommands): View {
       { fireImmediately: true },
     ),
     uiStore.subscribe((s) => s.hudHidden, refresh),
+    sessionStore.subscribe(
+      (s) => s.hurtCount,
+      () => {
+        // Restart the fade each time the player is hurt.
+        hurtFlash.classList.remove('is-active');
+        void hurtFlash.offsetWidth;
+        hurtFlash.classList.add('is-active');
+      },
+    ),
     uiStore.subscribe(
       (s) => s.notice,
       (message) => showNotice(message.text),

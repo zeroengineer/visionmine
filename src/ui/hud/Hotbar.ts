@@ -2,9 +2,10 @@ import { GAME_MODES } from '@/gameplay/modes/gameMode';
 import { HOTBAR_SIZE } from '@/gameplay/inventory/inventory';
 import { inventoryStore } from '@/state/inventoryStore';
 import { sessionStore } from '@/state/sessionStore';
-import { getBlockDef } from '@/world/blocks/blocks';
+import { getItemDef } from '@/gameplay/items/items';
 import { h, type View } from '../components/dom';
 import { createSlotElement, renderSlot } from '../components/slot';
+import { createVitalsBar } from './VitalsBar';
 
 const LABEL_VISIBLE_MS = 1600;
 
@@ -17,7 +18,14 @@ export function createHotbar(): View {
   });
   const label = h('div', { class: 'hotbar__label' });
   const bar = h('div', { class: 'hotbar__bar' }, ...slots.map((s) => s.el));
-  const el = h('div', { class: 'hotbar', attrs: { 'aria-label': 'Hotbar' } }, label, bar);
+  const vitals = createVitalsBar();
+  const el = h(
+    'div',
+    { class: 'hotbar', attrs: { 'aria-label': 'Hotbar' } },
+    label,
+    vitals.el,
+    bar,
+  );
   let labelTimer = 0;
 
   const render = (): void => {
@@ -32,7 +40,7 @@ export function createHotbar(): View {
   const showLabel = (): void => {
     const { slots: items, selected } = inventoryStore.getState();
     const item = items[selected];
-    label.textContent = item ? getBlockDef(item.block).name : '';
+    label.textContent = item ? getItemDef(item.item).name : '';
     label.classList.toggle('is-visible', Boolean(item));
     window.clearTimeout(labelTimer);
     labelTimer = window.setTimeout(() => label.classList.remove('is-visible'), LABEL_VISIBLE_MS);
@@ -55,6 +63,7 @@ export function createHotbar(): View {
     el,
     dispose() {
       window.clearTimeout(labelTimer);
+      vitals.dispose();
       for (const unsubscribe of unsubscribers) unsubscribe();
       el.remove();
     },
