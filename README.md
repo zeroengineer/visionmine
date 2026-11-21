@@ -24,31 +24,32 @@ Requires Node.js 20.19+ (22 recommended) and a browser with WebGL 2.
 
 These are the defaults. Every action except looking, the hotbar digits and `Esc` can be rebound in **Settings → Controls**, with up to two keys or mouse buttons each.
 
-| Action                   | Input                         |
-| ------------------------ | ----------------------------- |
-| Move                     | `W` `A` `S` `D`               |
-| Look                     | Mouse                         |
-| Jump / swim up / fly up  | `Space`                       |
-| Sprint                   | `Shift`                       |
-| Sneak / fly down         | `C` or `Ctrl`                 |
-| Dash (creative)          | `R`                           |
-| Double jump (creative)   | `Space` again in mid-air      |
-| Flying speed             | `Shift` + mouse wheel         |
-| Toggle flying (creative) | `F` or double-tap `Space`     |
-| Break block              | Left click (hold in survival) |
-| Place block / light TNT  | Right click                   |
-| Pick targeted block      | Middle click (creative)       |
-| Select hotbar slot       | `1`–`9` or mouse wheel        |
-| Previous hotbar slot     | `Q`                           |
-| Mark selection corner    | `X` (creative)                |
-| Build tools              | `B` (creative)                |
-| Undo / redo              | `Z` / `Y` (creative)          |
-| Inventory                | `E`                           |
-| Third-person camera      | `V`                           |
-| Debug overlay            | `F3`                          |
-| Hide interface           | `F1`                          |
-| Screenshot               | `F2`                          |
-| Pause / release mouse    | `Esc`                         |
+| Action                          | Input                         |
+| ------------------------------- | ----------------------------- |
+| Move                            | `W` `A` `S` `D`               |
+| Look                            | Mouse                         |
+| Jump / swim up / fly up         | `Space`                       |
+| Sprint                          | `Shift`                       |
+| Sneak / fly down                | `C` or `Ctrl`                 |
+| Dash (creative)                 | `R`                           |
+| Double jump (creative)          | `Space` again in mid-air      |
+| Flying speed                    | `Shift` + mouse wheel         |
+| Toggle flying (creative)        | `F` or double-tap `Space`     |
+| Break block                     | Left click (hold in survival) |
+| Place block / light TNT         | Right click                   |
+| Use door / crafting table / eat | Right click                   |
+| Pick targeted block             | Middle click (creative)       |
+| Select hotbar slot              | `1`–`9` or mouse wheel        |
+| Previous hotbar slot            | `Q`                           |
+| Mark selection corner           | `X` (creative)                |
+| Build tools                     | `B` (creative)                |
+| Undo / redo                     | `Z` / `Y` (creative)          |
+| Inventory                       | `E`                           |
+| Third-person camera             | `V`                           |
+| Debug overlay                   | `F3`                          |
+| Hide interface                  | `F1`                          |
+| Screenshot                      | `F2`                          |
+| Pause / release mouse           | `Esc`                         |
 
 ## Features
 
@@ -57,7 +58,7 @@ These are the defaults. Every action except looking, the hotbar digits and `Esc`
 - Infinite procedural terrain from layered simplex noise: plains, hills, mountain ridges, valleys, beaches, oceans, deserts and snowy peaks
 - Four terrain presets (Standard, Highlands, Archipelago, Flatlands), adjustable vegetation (trees, flowers and grass) and text seeds — the same seed always produces the same world
 - Chunked world (16 × 128 × 16) streamed around the player; terrain is generated in Web Workers
-- 30 block types: terrain, wood and stone, glass, water, TNT, slabs and stairs in four materials, doors, ladders, glass panes, torches, flowers and tall grass
+- 33 block types: terrain, wood and stone, coal and iron ore, glass, water, TNT, slabs and stairs in four materials, doors, ladders, glass panes, torches, a crafting table, flowers and tall grass
 
 **Play**
 
@@ -65,6 +66,9 @@ These are the defaults. Every action except looking, the hotbar digits and `Esc`
 - Sneaking that will not walk off ledges, optional auto-jump and toggle-sprint, and in Creative mode a double jump, a dash and adjustable flying speed
 - Break, place and pick blocks with a highlighted target block
 - Creative mode (unlimited blocks, instant breaking, flight) and Survival mode (mine to collect, timed breaking)
+- Survival: health, hunger and breath; fall damage, drowning and blast damage; apples to eat; respawn at the spawn point with your inventory
+- Tools: pickaxes, axes and shovels in wood, stone and iron mine their kind of block two to six times faster and wear out
+- Crafting: a 2 × 2 grid in the inventory and a 3 × 3 grid at a crafting table, for planks, sticks, tools, torches, slabs, stairs, doors, ladders and panes
 - Hotbar and expandable inventory with stack splitting and a creative block palette
 - Creative builder tools: mark two corners to select a region, then fill, replace, clear, copy, rotate and paste it; undo and redo for every edit, including explosions
 - Sand and gravel fall when nothing holds them up; water flows downhill, spreads up to seven blocks from its source and drains when the source is removed

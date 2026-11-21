@@ -23,7 +23,7 @@ src/
     persistence/ Repository interface, IndexedDB and in-memory backends, codecs
     World.ts     getBlock / setBlock facade, edits, change events
   gameplay/    Player and rules
-    player/ movement/ collision/ interaction/ building/ inventory/ modes/
+    player/ movement/ collision/ interaction/ building/ inventory/ items/ crafting/ modes/
   rendering/   Turns world and gameplay state into Three.js objects
     chunks/      ChunkRenderer (InstancedMesh), materials, mesh scheduler
     environment/ Day/night cycle, sky dome, fog, weather
@@ -138,6 +138,14 @@ Three inputs are deliberately not actions: mouse look, the hotbar digits, and Es
 - **BlockInteraction** — break, place and pick. Mode- and inventory-specific decisions are injected as `InteractionRules`, so the module does not depend on stores. Placement is refused when the new block would overlap the player's body.
 - **Builder tools** (`gameplay/building/`) — `regionOps.ts` holds pure region functions over `World` (fill, replace, clear, copy, rotate, paste) capped at 32,768 blocks and refusing regions that touch unloaded chunks. `EditHistory` listens to `World`'s `blockChanged` event and groups changes between two `commit()` calls; `WorldSession` commits after every break, placement and explosion (and once per frame as a catch-all) and `BuildTools` commits around each region operation, so one click, one explosion or one tool use is one undo step even when several happen within a single frame. `BuildTools` combines the two with the two-corner selection and the clipboard, and is switched off by game mode. `rendering/highlight/SelectionBox` draws the selection; `ui/menus/BuildMenu` drives it through `GameCommands.buildAction`.
 - **TNT** — `TntManager` counts down fuses and calls `explode`, a pure function over `World` that removes a ragged sphere and reports other TNT for chain reactions.
+
+## Survival: items, vitals and crafting
+
+- **Items** (`gameplay/items/items.ts`) — an inventory stack holds an item id. A placeable block is an item with the block's own id; tools, materials and food have ids from 256 up, each with a name, stack limit and a sprite tile in the atlas. Tools carry a kind (pickaxe, axe, shovel), a speed and a durability; a tool stack holds its remaining uses. `BlockDef.tool` names the kind that mines a block quickly and `BlockDef.drop` what it yields when that is not itself. Saved inventories from before items existed (field `block`) are read as-is.
+- **Vitals** (`gameplay/player/Vitals.ts`) — a pure model of health, hunger and breath, enabled by `GameModeRules.vitals`. The session reports each step what the player is doing and reads back the result; `PlayerController` measures each fall from its highest point and hands the distance over once on landing. Dying teleports the player to the world's spawn point with vitals restored. Health and hunger are stored in the player record.
+- **Crafting** (`gameplay/crafting/recipes.ts`) — recipes are data: a pattern trimmed to the rectangle its ingredients occupy, a key from pattern characters to item ids, and a result. `matchRecipe` takes the bounding rectangle of what is in the 3 × 3 grid and compares it with each pattern, also mirrored, so a recipe works wherever it is laid out. The grid lives in `inventoryStore` next to the pointer-carried stack; the inventory uses its 2 × 2 corner and a crafting table all of it. Closing the screen returns everything in the grid to the inventory.
+
+Generator version 3 puts coal and iron ore into stone as 2 × 2 × 2 pockets chosen by a hash of their position.
 
 ## State and UI
 
