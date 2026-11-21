@@ -103,7 +103,7 @@ test.describe('saving and loading', () => {
     await clickWorld(page, 'right');
     await expect
       .poll(async () => (await game.inventory(page)).slots[0])
-      .toEqual({ block: Block.Planks, count: 31 });
+      .toEqual({ item: Block.Planks, count: 31 });
 
     await quitToMenu(page);
     await page.reload();
@@ -112,7 +112,7 @@ test.describe('saving and loading', () => {
     await waitUntilPlaying(page);
 
     await expect(page.locator('.hud__mode')).toHaveText('Survival');
-    expect((await game.inventory(page)).slots[0]).toEqual({ block: Block.Planks, count: 31 });
+    expect((await game.inventory(page)).slots[0]).toEqual({ item: Block.Planks, count: 31 });
   });
 
   test('Reset World discards edits but keeps the terrain', async ({ page }) => {

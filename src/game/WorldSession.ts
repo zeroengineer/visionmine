@@ -13,7 +13,13 @@ import {
 } from '@/gameplay/interaction/BlockInteraction';
 import { TntManager } from '@/gameplay/interaction/TntManager';
 import { createRaycastHit, raycastVoxels } from '@/gameplay/interaction/voxelRaycast';
-import { sanitizeInventory, selectedStack, starterInventory } from '@/gameplay/inventory/inventory';
+import {
+  sanitizeInventory,
+  selectedBlock,
+  selectedStack,
+  starterInventory,
+} from '@/gameplay/inventory/inventory';
+import { getItemDef, ItemId, miningSpeed } from '@/gameplay/items/items';
 import { GAME_MODES } from '@/gameplay/modes/gameMode';
 import { FLY_SPEED_SCALE, PlayerController } from '@/gameplay/movement/PlayerController';
 import { Player, PLAYER_EYE_HEIGHT, PLAYER_HEIGHT } from '@/gameplay/player/Player';
@@ -66,6 +72,8 @@ export interface SessionInit {
 }
 
 const THIRD_PERSON_DISTANCE = 4.5;
+/** Chance that mining a leaf block also yields an apple. */
+const APPLE_CHANCE = 0.12;
 /** Chunk radius that must be meshed before a world is considered loaded. */
 const READY_RADIUS = 3;
 const isSolid = (id: number): boolean => IS_SOLID[id] === 1;
@@ -447,13 +455,27 @@ export class WorldSession {
     const rules = () => GAME_MODES[sessionStore.getState().mode];
     return {
       instantBreak: () => rules().infiniteBlocks,
-      selectedBlock: () => selectedStack(inventory.getState())?.block ?? 0,
+      selectedBlock: () => selectedBlock(inventory.getState()),
+      miningSpeed: (block) =>
+        miningSpeed(selectedStack(inventory.getState())?.item ?? 0, getBlockDef(block).tool),
       onPlaced: () => {
         if (!rules().infiniteBlocks) inventory.getState().consumeSelected(1);
       },
       onBroken: (block) => {
-        if (!rules().infiniteBlocks && getBlockDef(block).placeable)
-          inventory.getState().add(block, 1);
+        if (rules().infiniteBlocks) return;
+        const def = getBlockDef(block);
+        // Ore gives its mineral; everything else that can be held gives itself.
+        if (def.drop) inventory.getState().add(def.drop.item, def.drop.count);
+        else if (def.placeable) inventory.getState().add(block, 1);
+        // Now and then leaves give up an apple as well.
+        if (block === BlockId.Leaves && Math.random() < APPLE_CHANCE) {
+          inventory.getState().add(ItemId.Apple, 1);
+        }
+        const held = selectedStack(inventory.getState());
+        if (held && inventory.getState().wearSelected()) {
+          uiStore.getState().flash(`Your ${getItemDef(held.item).name} broke`);
+          this.engine.sfx.play('break');
+        }
       },
       onPicked: (block) => {
         if (rules().infiniteBlocks) inventory.getState().pick(block);
@@ -477,7 +499,7 @@ export class WorldSession {
     const hit = this.interaction.target;
     const feet = this.player.position;
     const result = this.build.run(action, {
-      heldBlock: selectedStack(inventoryStore.getState())?.block ?? 0,
+      heldBlock: selectedBlock(inventoryStore.getState()),
       pasteOrigin: hit ? { x: hit.x + hit.nx, y: hit.y + hit.ny, z: hit.z + hit.nz } : null,
       // Never bury the player inside what they build.
       skip: (x, y, z) => blockIntersectsPlayer(x, y, z, feet),

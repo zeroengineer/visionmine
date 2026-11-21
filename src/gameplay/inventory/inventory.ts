@@ -1,9 +1,13 @@
-import { BlockId, getBlockDef, isValidBlockId, PLACEABLE_BLOCKS } from '@/world/blocks/blocks';
+import { BlockId, PLACEABLE_BLOCKS } from '@/world/blocks/blocks';
+import { getItemDef, isBlockItem, isValidItem } from '../items/items';
 import type { GameMode } from '../modes/gameMode';
 
 export interface ItemStack {
-  readonly block: BlockId;
+  /** Item id: a block id, or an id from `ItemId` for things that are not blocks. */
+  readonly item: number;
   readonly count: number;
+  /** Uses left, for tools. */
+  readonly durability?: number;
 }
 
 export type Slot = ItemStack | null;
@@ -33,8 +37,18 @@ export function createInventory(rows = BASE_BAG_ROWS): Inventory {
   return { slots: new Array<Slot>(slotCount(rows)).fill(null), selected: 0 };
 }
 
-function isHoldable(block: number): block is BlockId {
-  return isValidBlockId(block) && getBlockDef(block).placeable;
+const isHoldable = isValidItem;
+
+/** Largest stack of an item (1 for tools). */
+function stackLimit(item: number): number {
+  return Math.min(MAX_STACK, getItemDef(item).maxStack);
+}
+
+/** A fresh stack, with full durability if the item is a tool. */
+export function makeStack(item: number, count: number, durability?: number): ItemStack {
+  const tool = getItemDef(item).tool;
+  if (!tool) return { item, count };
+  return { item, count: 1, durability: durability ?? tool.durability };
 }
 
 /** Starting items for a new world. */
@@ -53,12 +67,12 @@ export function starterInventory(mode: GameMode): Inventory {
       BlockId.Brick,
       BlockId.Tnt,
     ];
-    hotbar.forEach((block, i) => (slots[i] = { block, count: MAX_STACK }));
+    hotbar.forEach((block, i) => (slots[i] = { item: block, count: MAX_STACK }));
   } else {
-    slots[0] = { block: BlockId.Planks, count: 32 };
-    slots[1] = { block: BlockId.Cobblestone, count: 32 };
-    slots[2] = { block: BlockId.Glass, count: 16 };
-    slots[3] = { block: BlockId.Tnt, count: 4 };
+    slots[0] = { item: BlockId.Planks, count: 32 };
+    slots[1] = { item: BlockId.Cobblestone, count: 32 };
+    slots[2] = { item: BlockId.Glass, count: 16 };
+    slots[3] = { item: BlockId.Tnt, count: 4 };
   }
   return { slots, selected: 0 };
 }
@@ -84,25 +98,29 @@ export function cycleSelection(inventory: Inventory, direction: number): Invento
  */
 export function addItem(
   inventory: Inventory,
-  block: number,
+  item: number,
   count: number,
+  durability?: number,
 ): { inventory: Inventory; leftover: number } {
-  if (!isHoldable(block) || count <= 0) return { inventory, leftover: Math.max(0, count) };
+  if (!isHoldable(item) || count <= 0) return { inventory, leftover: Math.max(0, count) };
   const slots = [...inventory.slots];
+  const limit = stackLimit(item);
   let remaining = Math.floor(count);
 
-  for (let i = 0; i < slots.length && remaining > 0; i++) {
-    const slot = slots[i];
-    if (slot && slot.block === block && slot.count < MAX_STACK) {
-      const moved = Math.min(MAX_STACK - slot.count, remaining);
-      slots[i] = { block, count: slot.count + moved };
-      remaining -= moved;
+  if (limit > 1) {
+    for (let i = 0; i < slots.length && remaining > 0; i++) {
+      const slot = slots[i];
+      if (slot && slot.item === item && slot.count < limit) {
+        const moved = Math.min(limit - slot.count, remaining);
+        slots[i] = { item, count: slot.count + moved };
+        remaining -= moved;
+      }
     }
   }
   for (let i = 0; i < slots.length && remaining > 0; i++) {
     if (!slots[i]) {
-      const moved = Math.min(MAX_STACK, remaining);
-      slots[i] = { block, count: moved };
+      const moved = Math.min(limit, remaining);
+      slots[i] = makeStack(item, moved, durability);
       remaining -= moved;
     }
   }
@@ -115,7 +133,7 @@ export function removeFromSlot(inventory: Inventory, index: number, count = 1): 
   if (!slot || count <= 0) return inventory;
   const slots = [...inventory.slots];
   const left = slot.count - count;
-  slots[index] = left > 0 ? { block: slot.block, count: left } : null;
+  slots[index] = left > 0 ? { ...slot, count: left } : null;
   return { ...inventory, slots };
 }
 
@@ -128,7 +146,7 @@ export function setSlot(inventory: Inventory, index: number, slot: Slot): Invent
 
 export function countOf(inventory: Inventory, block: number): number {
   let total = 0;
-  for (const slot of inventory.slots) if (slot?.block === block) total += slot.count;
+  for (const slot of inventory.slots) if (slot?.item === block) total += slot.count;
   return total;
 }
 
@@ -151,8 +169,8 @@ export function clickSlot(
     if (secondary && slot.count > 1) {
       const taken = Math.ceil(slot.count / 2);
       return {
-        inventory: setSlot(inventory, index, { block: slot.block, count: slot.count - taken }),
-        cursor: { block: slot.block, count: taken },
+        inventory: setSlot(inventory, index, { item: slot.item, count: slot.count - taken }),
+        cursor: { item: slot.item, count: taken },
       };
     }
     return { inventory: setSlot(inventory, index, null), cursor: slot };
@@ -161,20 +179,21 @@ export function clickSlot(
   if (!slot) {
     if (secondary && cursor.count > 1) {
       return {
-        inventory: setSlot(inventory, index, { block: cursor.block, count: 1 }),
-        cursor: { block: cursor.block, count: cursor.count - 1 },
+        inventory: setSlot(inventory, index, { item: cursor.item, count: 1 }),
+        cursor: { item: cursor.item, count: cursor.count - 1 },
       };
     }
     return { inventory: setSlot(inventory, index, cursor), cursor: null };
   }
 
-  if (slot.block === cursor.block) {
-    const moved = Math.min(secondary ? 1 : cursor.count, MAX_STACK - slot.count);
+  // Tools never stack, so two of the same tool swap like different items.
+  if (slot.item === cursor.item && stackLimit(slot.item) > 1) {
+    const moved = Math.min(secondary ? 1 : cursor.count, stackLimit(slot.item) - slot.count);
     if (moved <= 0) return { inventory, cursor };
     const left = cursor.count - moved;
     return {
-      inventory: setSlot(inventory, index, { block: slot.block, count: slot.count + moved }),
-      cursor: left > 0 ? { block: cursor.block, count: left } : null,
+      inventory: setSlot(inventory, index, { item: slot.item, count: slot.count + moved }),
+      cursor: left > 0 ? { item: cursor.item, count: left } : null,
     };
   }
 
@@ -199,9 +218,9 @@ export function expandInventory(inventory: Inventory): Inventory {
 export function pickBlock(inventory: Inventory, block: number): Inventory {
   if (!isHoldable(block)) return inventory;
   for (let i = 0; i < HOTBAR_SIZE; i++) {
-    if (inventory.slots[i]?.block === block) return selectSlot(inventory, i);
+    if (inventory.slots[i]?.item === block) return selectSlot(inventory, i);
   }
-  return setSlot(inventory, inventory.selected, { block, count: MAX_STACK });
+  return setSlot(inventory, inventory.selected, makeStack(block, stackLimit(block)));
 }
 
 /** Rebuilds a valid inventory from untrusted (saved) data. */
@@ -212,10 +231,25 @@ export function sanitizeInventory(raw: unknown): Inventory {
   const rows = Math.min(MAX_BAG_ROWS, Math.max(BASE_BAG_ROWS, Math.ceil(extra / ROW_SIZE)));
   const slots = new Array<Slot>(slotCount(rows)).fill(null);
   for (let i = 0; i < slots.length; i++) {
-    const item = rawSlots[i] as { block?: unknown; count?: unknown } | null | undefined;
-    if (!item || !isHoldable(item.block as number)) continue;
-    const count = typeof item.count === 'number' ? Math.floor(item.count) : 0;
-    if (count > 0) slots[i] = { block: item.block as BlockId, count: Math.min(MAX_STACK, count) };
+    const stored = rawSlots[i] as
+      { item?: unknown; block?: unknown; count?: unknown; durability?: unknown } | null | undefined;
+    if (!stored) continue;
+    // Saves from before non-block items existed call the field `block`.
+    const id = stored.item ?? stored.block;
+    if (!isHoldable(id)) continue;
+    const count = typeof stored.count === 'number' ? Math.floor(stored.count) : 0;
+    if (count <= 0) continue;
+    const tool = getItemDef(id).tool;
+    if (!tool) {
+      slots[i] = { item: id, count: Math.min(stackLimit(id), count) };
+      continue;
+    }
+    const left =
+      typeof stored.durability === 'number' && Number.isFinite(stored.durability)
+        ? Math.floor(stored.durability)
+        : tool.durability;
+    // A tool with no uses left would have broken; drop it rather than restore it.
+    if (left > 0) slots[i] = { item: id, count: 1, durability: Math.min(tool.durability, left) };
   }
   const selected =
     typeof r.selected === 'number' &&
@@ -229,3 +263,27 @@ export function sanitizeInventory(raw: unknown): Inventory {
 
 /** Every block that can appear in the creative palette. */
 export const PALETTE_BLOCKS: readonly BlockId[] = PLACEABLE_BLOCKS;
+
+/** The block the selected stack would place, or 0 when the hand is empty or holds a non-block item. */
+export function selectedBlock(inventory: Inventory): number {
+  const stack = selectedStack(inventory);
+  return stack && isBlockItem(stack.item) ? stack.item : 0;
+}
+
+/**
+ * Uses the selected tool once. Returns the new inventory and whether the tool
+ * wore out (its slot is then empty). Anything that is not a tool is unchanged.
+ */
+export function wearSelectedTool(inventory: Inventory): { inventory: Inventory; broke: boolean } {
+  const stack = selectedStack(inventory);
+  if (!stack || stack.durability === undefined) return { inventory, broke: false };
+  const left = stack.durability - 1;
+  return {
+    inventory: setSlot(
+      inventory,
+      inventory.selected,
+      left > 0 ? { ...stack, durability: left } : null,
+    ),
+    broke: left <= 0,
+  };
+}

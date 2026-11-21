@@ -30,6 +30,24 @@ export const Tile = {
   FlowerRed: 24,
   FlowerYellow: 25,
   TallGrass: 26,
+  CoalOre: 27,
+  IronOre: 28,
+  CraftingTop: 29,
+  CraftingSide: 30,
+  // Sprites of items that are not blocks.
+  ItemStick: 31,
+  ItemCoal: 32,
+  ItemIron: 33,
+  ItemApple: 34,
+  ItemWoodPickaxe: 35,
+  ItemWoodAxe: 36,
+  ItemWoodShovel: 37,
+  ItemStonePickaxe: 38,
+  ItemStoneAxe: 39,
+  ItemStoneShovel: 40,
+  ItemIronPickaxe: 41,
+  ItemIronAxe: 42,
+  ItemIronShovel: 43,
 } as const;
 
 export type Tile = (typeof Tile)[keyof typeof Tile];

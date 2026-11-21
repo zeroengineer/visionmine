@@ -43,7 +43,12 @@ export interface DebugApi {
   } | null;
   look(yaw: number, pitch: number): void;
   teleport(x: number, y: number, z: number): void;
-  inventory(): { selected: number; slots: Array<{ block: number; count: number } | null> };
+  inventory(): {
+    selected: number;
+    slots: Array<{ item: number; count: number; durability?: number } | null>;
+  };
+  /** Adds items to the inventory; returns how many did not fit. */
+  give(item: number, count?: number): number;
   stats(): DebugInfo | null;
   /** Makes gameplay input live without real pointer lock (headless browsers). */
   virtualLock(locked: boolean): void;
@@ -95,6 +100,7 @@ export function installDebugHook(game: Game): void {
     setBlock: (x, y, z, block, meta = 0) =>
       playing()?.world.setBlock(Math.floor(x), Math.floor(y), Math.floor(z), block, meta) ?? false,
     hold: (block) => inventoryStore.getState().pick(block),
+    give: (item, count = 1) => inventoryStore.getState().add(item, count),
     target() {
       const session = playing();
       if (!session) return null;

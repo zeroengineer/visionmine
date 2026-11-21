@@ -90,7 +90,7 @@ test.describe('hotbar and inventory', () => {
     await pressSlot(page, bagSlots(page).nth(0));
     await expect
       .poll(async () => (await game.inventory(page)).slots[9])
-      .toEqual({ block: Block.Sand, count: 64 });
+      .toEqual({ item: Block.Sand, count: 64 });
     await expect(page.locator('.slot--cursor')).toBeHidden();
 
     // Pick the stack up and swap it with hotbar slot 1.
@@ -99,30 +99,30 @@ test.describe('hotbar and inventory', () => {
     await pressSlot(page, inventoryHotbarSlots(page).nth(0));
     await expect
       .poll(async () => (await game.inventory(page)).slots[0])
-      .toEqual({ block: Block.Sand, count: 64 });
+      .toEqual({ item: Block.Sand, count: 64 });
     // The grass that was there is now carried; drop it in another backpack slot.
     await pressSlot(page, bagSlots(page).nth(5));
     await expect
       .poll(async () => (await game.inventory(page)).slots[14])
-      .toEqual({ block: Block.Grass, count: 64 });
+      .toEqual({ item: Block.Grass, count: 64 });
 
     // Right-click takes half of a stack.
     await pressSlot(page, bagSlots(page).nth(5), true);
     await expect
       .poll(async () => (await game.inventory(page)).slots[14])
-      .toEqual({ block: Block.Grass, count: 32 });
+      .toEqual({ item: Block.Grass, count: 32 });
     // Right-click with a carried stack drops a single item.
     await pressSlot(page, bagSlots(page).nth(6), true);
     await expect
       .poll(async () => (await game.inventory(page)).slots[15])
-      .toEqual({ block: Block.Grass, count: 1 });
+      .toEqual({ item: Block.Grass, count: 1 });
 
     // Closing with a stack still on the pointer returns it to the inventory.
     await page.keyboard.press('KeyE');
     await waitForScreen(page, 'playing');
     const { slots } = await game.inventory(page);
     const grass = slots.reduce(
-      (sum, slot) => sum + (slot?.block === Block.Grass ? slot.count : 0),
+      (sum, slot) => sum + (slot?.item === Block.Grass ? slot.count : 0),
       0,
     );
     expect(grass).toBe(64);

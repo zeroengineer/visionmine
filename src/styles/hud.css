@@ -38,6 +38,23 @@
   pointer-events: none;
 }
 
+.slot__wear {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 4px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.slot__wear-fill {
+  display: block;
+  height: 100%;
+}
+
 .slot__key {
   position: absolute;
   left: 4px;

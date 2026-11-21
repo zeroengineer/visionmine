@@ -297,7 +297,7 @@ test.describe('shaped blocks', () => {
     await page.mouse.up();
     await expect
       .poll(async () => (await game.inventory(page)).slots[0])
-      .toEqual({ block: Block.Torch, count: 64 });
+      .toEqual({ item: Block.Torch, count: 64 });
   });
 });
 

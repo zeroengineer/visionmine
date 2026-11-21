@@ -40,7 +40,7 @@ test.describe('block interaction in creative mode', () => {
 
     // Creative mode never uses blocks up.
     const { slots } = await game.inventory(page);
-    expect(slots[7]).toEqual({ block: Block.Brick, count: 64 });
+    expect(slots[7]).toEqual({ item: Block.Brick, count: 64 });
   });
 
   test('each hotbar block can be placed', async ({ page }) => {
@@ -49,7 +49,7 @@ test.describe('block interaction in creative mode', () => {
     const { slots } = await game.inventory(page);
 
     for (let slot = 0; slot < 8; slot++) {
-      const block = slots[slot]!.block;
+      const block = slots[slot]!.item;
       await page.keyboard.press(`Digit${slot + 1}`);
       await game.look(page, 0, -0.8);
       // Aim at the ground block again: the previous placement was removed below.
@@ -123,13 +123,13 @@ test.describe('block interaction in survival mode', () => {
 
   test('placing consumes blocks and mining collects them', async ({ page }) => {
     const before = await game.inventory(page);
-    expect(before.slots[0]).toEqual({ block: Block.Planks, count: 32 });
+    expect(before.slots[0]).toEqual({ item: Block.Planks, count: 32 });
 
     const ground = await aimAtGround(page);
     await clickWorld(page, 'right');
     const cell = { x: ground.x + ground.nx, y: ground.y + ground.ny, z: ground.z + ground.nz };
     await expect.poll(() => game.getBlock(page, cell.x, cell.y, cell.z)).toBe(Block.Planks);
-    expect((await game.inventory(page)).slots[0]).toEqual({ block: Block.Planks, count: 31 });
+    expect((await game.inventory(page)).slots[0]).toEqual({ item: Block.Planks, count: 31 });
 
     // A single click does not break a block in survival; it has to be mined.
     await clickWorld(page, 'left');
@@ -143,7 +143,7 @@ test.describe('block interaction in survival mode', () => {
     await page.mouse.up({ button: 'left' });
     await expect
       .poll(async () => (await game.inventory(page)).slots[0])
-      .toEqual({ block: Block.Planks, count: 32 });
+      .toEqual({ item: Block.Planks, count: 32 });
   });
 
   test('flying is not available', async ({ page }) => {

@@ -6,14 +6,16 @@ import {
   createInventory,
   cycleSelection,
   expandInventory,
+  makeStack,
   MAX_STACK,
   pickBlock,
   removeFromSlot,
   selectSlot,
   type Inventory,
   type Slot,
+  wearSelectedTool,
 } from '@/gameplay/inventory/inventory';
-import type { BlockId } from '@/world/blocks/blocks';
+import { getItemDef } from '@/gameplay/items/items';
 
 export interface InventoryState extends Inventory {
   /** Stack attached to the pointer while the inventory screen is open. */
@@ -23,11 +25,13 @@ export interface InventoryState extends Inventory {
   select(index: number): void;
   cycle(direction: number): void;
   /** Adds items; returns the amount that did not fit. */
-  add(block: number, count: number): number;
+  add(item: number, count: number, durability?: number): number;
+  /** Uses the selected tool once; returns true if it wore out. */
+  wearSelected(): boolean;
   consumeSelected(count?: number): void;
   click(index: number, secondary?: boolean): void;
   /** Creative palette: grab a full stack of a block onto the pointer. */
-  grab(block: BlockId): void;
+  grab(item: number): void;
   /** Returns the pointer stack to the inventory (or discards what does not fit). */
   dropCursor(): void;
   pick(block: number): void;
@@ -50,21 +54,27 @@ export const inventoryStore = createStore<InventoryState>()(
       snapshot: current,
       select: (index) => apply(set, selectSlot(current(), index)),
       cycle: (direction) => apply(set, cycleSelection(current(), direction)),
-      add(block, count) {
-        const result = addItem(current(), block, count);
+      add(item, count, durability) {
+        const result = addItem(current(), item, count, durability);
         apply(set, result.inventory);
         return result.leftover;
+      },
+      wearSelected() {
+        const result = wearSelectedTool(current());
+        apply(set, result.inventory);
+        return result.broke;
       },
       consumeSelected: (count = 1) => apply(set, removeFromSlot(current(), get().selected, count)),
       click(index, secondary = false) {
         const result = clickSlot(current(), get().cursor, index, secondary);
         set({ slots: result.inventory.slots, cursor: result.cursor });
       },
-      grab: (block) => set({ cursor: { block, count: MAX_STACK } }),
+      grab: (item) =>
+        set({ cursor: makeStack(item, Math.min(MAX_STACK, getItemDef(item).maxStack)) }),
       dropCursor() {
         const cursor = get().cursor;
         if (!cursor) return;
-        const result = addItem(current(), cursor.block, cursor.count);
+        const result = addItem(current(), cursor.item, cursor.count, cursor.durability);
         set({ slots: result.inventory.slots, cursor: null });
       },
       pick: (block) => apply(set, pickBlock(current(), block)),

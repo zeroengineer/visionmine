@@ -1,4 +1,5 @@
 import type { TileAtlas } from '@/rendering/textures/TileAtlas';
+import { getItemDef } from '@/gameplay/items/items';
 import { blockBoxes, Face, getBlockDef } from '@/world/blocks/blocks';
 import type { Tile } from '@/world/blocks/tiles';
 
@@ -41,6 +42,13 @@ function drawFace(
     paint.fillRect(rx, ry, rw, rh);
   }
   ctx.drawImage(layer, 0, 0);
+}
+
+/** Icon for anything that fits in a slot: a block's isometric shape, or an item's sprite. */
+export function itemIconUrl(item: number): string {
+  const sprite = getItemDef(item).tile;
+  if (sprite === null) return blockIconUrl(item);
+  return atlas ? atlas.tileUrl(sprite) : '';
 }
 
 /** Isometric icon of a block's shape, as a cached data URL. */

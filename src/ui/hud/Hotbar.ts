@@ -2,7 +2,7 @@ import { GAME_MODES } from '@/gameplay/modes/gameMode';
 import { HOTBAR_SIZE } from '@/gameplay/inventory/inventory';
 import { inventoryStore } from '@/state/inventoryStore';
 import { sessionStore } from '@/state/sessionStore';
-import { getBlockDef } from '@/world/blocks/blocks';
+import { getItemDef } from '@/gameplay/items/items';
 import { h, type View } from '../components/dom';
 import { createSlotElement, renderSlot } from '../components/slot';
 
@@ -32,7 +32,7 @@ export function createHotbar(): View {
   const showLabel = (): void => {
     const { slots: items, selected } = inventoryStore.getState();
     const item = items[selected];
-    label.textContent = item ? getBlockDef(item.block).name : '';
+    label.textContent = item ? getItemDef(item.item).name : '';
     label.classList.toggle('is-visible', Boolean(item));
     window.clearTimeout(labelTimer);
     labelTimer = window.setTimeout(() => label.classList.remove('is-visible'), LABEL_VISIBLE_MS);

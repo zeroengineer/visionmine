@@ -39,6 +39,131 @@ const grassTop: Painter = (_x, _y, rand) => {
   return shade(0x6aaa3a, 0.9 + rand(1) * 0.2);
 };
 
+/**
+ * Item sprites as 16 × 16 pixel maps. `.` is transparent, `h`/`H` are the
+ * light and dark of a wooden handle, and `m`/`M`/`l` are the main, shaded and
+ * highlighted colour of whatever the item is made of.
+ */
+const STICK = [
+  '................',
+  '................',
+  '...........hH...',
+  '..........hH....',
+  '.........hH.....',
+  '........hH......',
+  '.......hH.......',
+  '......hH........',
+  '.....hH.........',
+  '....hH..........',
+  '...hH...........',
+  '..hH............',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+const LUMP = [
+  '................',
+  '................',
+  '................',
+  '.....mmmm.......',
+  '....mlmmmmM.....',
+  '...mllmmmmmM....',
+  '...mlmmmmmmM....',
+  '..mmmmmmmmmMM...',
+  '..mmmmmmmmMMM...',
+  '..mmmmmmmMMMM...',
+  '...mmmmmMMMM....',
+  '....MMMMMMM.....',
+  '.....MMMM.......',
+  '................',
+  '................',
+  '................',
+];
+const APPLE = [
+  '................',
+  '........H.......',
+  '.......H........',
+  '....mm.H.mm.....',
+  '...mlmmmmmmM....',
+  '..mllmmmmmmmM...',
+  '..mlmmmmmmmmM...',
+  '..mmmmmmmmmmM...',
+  '..mmmmmmmmmMM...',
+  '..mmmmmmmmmMM...',
+  '...mmmmmmmMM....',
+  '...mmmmmmMMM....',
+  '....MMM.MMM.....',
+  '................',
+  '................',
+  '................',
+];
+const PICKAXE = [
+  '................',
+  '....mmmmmmm.....',
+  '...mlllllmmMh...',
+  '..mM.....mhHM...',
+  '..M.....hH.mM...',
+  '.......hH..mM...',
+  '......hH...mM...',
+  '.....hH.....M...',
+  '....hH..........',
+  '...hH...........',
+  '..hH............',
+  '.hH.............',
+  '.H..............',
+  '................',
+  '................',
+  '................',
+];
+const AXE = [
+  '................',
+  '.........mm.....',
+  '........mlmm....',
+  '.......mllmmh...',
+  '......mmlmmhHM..',
+  '......mmmmhH.M..',
+  '.......mmhHmM...',
+  '........hHmM....',
+  '.......hH.......',
+  '......hH........',
+  '.....hH.........',
+  '....hH..........',
+  '...hH...........',
+  '..hH............',
+  '..H.............',
+  '................',
+];
+const SHOVEL = [
+  '................',
+  '..........mmm...',
+  '.........mllmM..',
+  '.........mlmmM..',
+  '.........mmmMM..',
+  '........hmMMM...',
+  '.......hH.......',
+  '......hH........',
+  '.....hH.........',
+  '....hH..........',
+  '...hH...........',
+  '..hH............',
+  '.hH.............',
+  '.H..............',
+  '................',
+  '................',
+];
+const WOOD = { m: 0xb98d55, M: 0x8a6739, l: 0xd6b07a };
+const STONE = { m: 0x8b8f94, M: 0x5f6368, l: 0xb4b8bd };
+const IRON = { m: 0xd9dde2, M: 0x9aa1a9, l: 0xffffff };
+
+function sprite(rows: readonly string[], colours: Record<string, number>): Painter {
+  const palette: Record<string, number> = { h: 0x8a6739, H: 0x5b4025, ...colours };
+  return (x, y) => {
+    const colour = palette[rows[y]?.[x] ?? '.'];
+    return colour === undefined ? [0, 0, 0, 0] : shade(colour, 1);
+  };
+}
+
 const PAINTERS: Record<Tile, Painter> = {
   [Tile.GrassTop]: grassTop,
   [Tile.GrassSide]: (x, y, rand) => {
@@ -188,7 +313,44 @@ const PAINTERS: Record<Tile, Painter> = {
     if (!blade || S - 1 - y >= height) return [0, 0, 0, 0];
     return shade(0x6aaa3a, 0.8 + hash(x, y, 3) * 0.35);
   },
+  [Tile.CoalOre]: (x, y, rand) => ore(x, y, rand, 0x26262a),
+  [Tile.IronOre]: (x, y, rand) => ore(x, y, rand, 0xd8a47c),
+  [Tile.CraftingTop]: (x, y, rand) => {
+    const edge = x === 0 || y === 0 || x === S - 1 || y === S - 1;
+    if (edge) return shade(0x6b4d2a, 1);
+    // A 3 × 3 grid scored into the top.
+    if (x % 5 === 0 || y % 5 === 0) return shade(0x8a6739, 0.95);
+    return shade(0xc79a5c, 0.94 + rand() * 0.08);
+  },
+  [Tile.CraftingSide]: (x, y, rand) => {
+    if (y < 3) return shade(0x6b4d2a, 0.95 + rand() * 0.08);
+    // Tools hanging on the side: a saw-like bar and a hammer head.
+    if (y >= 5 && y <= 6 && x >= 2 && x <= 7) return shade(0xb9bec4, 1);
+    if (x >= 10 && x <= 13 && y >= 5 && y <= 7) return shade(0x8b8f94, 1);
+    if (x >= 11 && x <= 12 && y >= 8 && y <= 12) return shade(0x7a5a33, 1);
+    return shade(0xb98d55, 0.9 + hash(x >> 2, 4, 9) * 0.12 + rand() * 0.05);
+  },
+  [Tile.ItemStick]: sprite(STICK, {}),
+  [Tile.ItemCoal]: sprite(LUMP, { m: 0x2b2b30, M: 0x15151a, l: 0x4a4a52 }),
+  [Tile.ItemIron]: sprite(LUMP, { m: 0xd9dde2, M: 0x9aa1a9, l: 0xffffff }),
+  [Tile.ItemApple]: sprite(APPLE, { m: 0xd8342c, M: 0xa3221c, l: 0xf47a6c }),
+  [Tile.ItemWoodPickaxe]: sprite(PICKAXE, WOOD),
+  [Tile.ItemWoodAxe]: sprite(AXE, WOOD),
+  [Tile.ItemWoodShovel]: sprite(SHOVEL, WOOD),
+  [Tile.ItemStonePickaxe]: sprite(PICKAXE, STONE),
+  [Tile.ItemStoneAxe]: sprite(AXE, STONE),
+  [Tile.ItemStoneShovel]: sprite(SHOVEL, STONE),
+  [Tile.ItemIronPickaxe]: sprite(PICKAXE, IRON),
+  [Tile.ItemIronAxe]: sprite(AXE, IRON),
+  [Tile.ItemIronShovel]: sprite(SHOVEL, IRON),
 };
+
+/** Stone with flecks of a mineral. */
+function ore(x: number, y: number, rand: (salt?: number) => number, mineral: number): Rgba {
+  const cluster = hash(Math.floor((x + 1) / 3), Math.floor((y + 2) / 3), 57) > 0.62;
+  if (cluster && hash(x, y, 58) > 0.3) return shade(mineral, 0.9 + rand() * 0.2);
+  return shade(0x8b8f94, 0.86 + rand(1) * 0.14);
+}
 
 /** A stem with two leaves and a round bloom. */
 function flower(x: number, y: number, petal: number, centre: number): Rgba {
