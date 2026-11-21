@@ -269,3 +269,24 @@ export function canvasBrightness(page: Page): Promise<number> {
       }),
   );
 }
+
+/**
+ * Lays a flat stone floor at the player's feet level with clear air above it,
+ * north of and around the player, so placement and walking are predictable
+ * whatever the terrain and plants at the spawn point.
+ */
+export async function layFlatPad(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const api = window.__visionmine;
+    const p = api.player()!;
+    const floor = Math.floor(p.y) - 1;
+    for (let dz = -10; dz <= 3; dz++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const x = Math.floor(p.x) + dx;
+        const z = Math.floor(p.z) + dz;
+        for (let y = floor + 1; y <= floor + 7; y++) api.setBlock(x, y, z, 0);
+        api.setBlock(x, floor, z, 3);
+      }
+    }
+  });
+}
