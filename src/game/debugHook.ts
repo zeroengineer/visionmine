@@ -28,6 +28,10 @@ export interface DebugApi {
   getBlock(x: number, y: number, z: number): number;
   /** State byte of a block (orientation, open/closed…). */
   getMeta(x: number, y: number, z: number): number;
+  /** Writes a block directly, as an edit. Returns false if nothing changed. */
+  setBlock(x: number, y: number, z: number, block: number, meta?: number): boolean;
+  /** Puts a full stack of a block into the selected hotbar slot. */
+  hold(block: number): void;
   target(): {
     x: number;
     y: number;
@@ -88,6 +92,9 @@ export function installDebugHook(game: Game): void {
       playing()?.world.getBlock(Math.floor(x), Math.floor(y), Math.floor(z)) ?? 0,
     getMeta: (x, y, z) =>
       playing()?.world.getMeta(Math.floor(x), Math.floor(y), Math.floor(z)) ?? 0,
+    setBlock: (x, y, z, block, meta = 0) =>
+      playing()?.world.setBlock(Math.floor(x), Math.floor(y), Math.floor(z), block, meta) ?? false,
+    hold: (block) => inventoryStore.getState().pick(block),
     target() {
       const session = playing();
       if (!session) return null;

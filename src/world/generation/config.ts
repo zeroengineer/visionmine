@@ -4,9 +4,18 @@ export interface WorldConfig {
   /** Any text; hashed to the numeric generator seed. */
   seed: string;
   terrain: TerrainType;
-  /** Multiplier for tree frequency: 0 = none, 1 = normal, 2 = dense. */
+  /** Multiplier for trees and plants: 0 = none, 1 = normal, 2 = dense trees. */
   treeDensity: number;
+  /**
+   * Generator version the world was created with. A world keeps its version for
+   * life, so terrain already explored never changes under the player when the
+   * generator learns something new. Absent means version 1.
+   */
+  generator?: number;
 }
+
+/** Version given to new worlds. 2 added flowers and tall grass. */
+export const GENERATOR_VERSION = 2;
 
 export interface TerrainPreset {
   label: string;
@@ -84,5 +93,12 @@ export function sanitizeWorldConfig(raw: unknown): WorldConfig {
         : DEFAULT_WORLD_CONFIG.seed,
     terrain: isTerrainType(r.terrain) ? r.terrain : 'standard',
     treeDensity: Math.min(2, Math.max(0, density)),
+    generator:
+      typeof r.generator === 'number' &&
+      Number.isInteger(r.generator) &&
+      r.generator >= 1 &&
+      r.generator <= GENERATOR_VERSION
+        ? r.generator
+        : 1,
   };
 }

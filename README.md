@@ -55,9 +55,9 @@ These are the defaults. Every action except looking, the hotbar digits and `Esc`
 **World**
 
 - Infinite procedural terrain from layered simplex noise: plains, hills, mountain ridges, valleys, beaches, oceans, deserts and snowy peaks
-- Four terrain presets (Standard, Highlands, Archipelago, Flatlands), adjustable tree density and text seeds — the same seed always produces the same world
+- Four terrain presets (Standard, Highlands, Archipelago, Flatlands), adjustable vegetation (trees, flowers and grass) and text seeds — the same seed always produces the same world
 - Chunked world (16 × 128 × 16) streamed around the player; terrain is generated in Web Workers
-- 15 block types including glass, leaves, water and TNT
+- 30 block types: terrain, wood and stone, glass, water, TNT, slabs and stairs in four materials, doors, ladders, glass panes, torches, flowers and tall grass
 
 **Play**
 
@@ -67,6 +67,7 @@ These are the defaults. Every action except looking, the hotbar digits and `Esc`
 - Creative mode (unlimited blocks, instant breaking, flight) and Survival mode (mine to collect, timed breaking)
 - Hotbar and expandable inventory with stack splitting and a creative block palette
 - Creative builder tools: mark two corners to select a region, then fill, replace, clear, copy, rotate and paste it; undo and redo for every edit, including explosions
+- Slabs and stairs you walk up without jumping, doors that open with a click, ladders to climb, and torches that light the night
 - TNT with fuses, chain reactions, knockback and camera shake
 - Third-person camera with terrain-aware distance
 

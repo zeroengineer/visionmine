@@ -144,7 +144,63 @@ const PAINTERS: Record<Tile, Painter> = {
     if (r < 0.2) return shade(0x5a5a62, 1);
     return shade(0x3a3a3f, 0.9 + rand(1) * 0.2);
   },
+  [Tile.DoorTop]: (x, y, rand) => {
+    const frame = x === 0 || x === S - 1 || y === 0;
+    if (frame) return shade(0x6b4d2a, 0.95 + rand() * 0.08);
+    // Two small windows.
+    const window = y >= 3 && y <= 9 && ((x >= 3 && x <= 6) || (x >= 9 && x <= 12));
+    if (window)
+      return y === 3 || y === 9 || x === 3 || x === 6 || x === 9 || x === 12
+        ? shade(0x6b4d2a, 1)
+        : [0, 0, 0, 0];
+    return shade(0x9a7446, 0.92 + hash(x >> 2, 3, 11) * 0.1 + rand() * 0.05);
+  },
+  [Tile.DoorBottom]: (x, y, rand) => {
+    const frame = x === 0 || x === S - 1 || y === S - 1;
+    if (frame) return shade(0x6b4d2a, 0.95 + rand() * 0.08);
+    // Handle near the top edge, which meets the upper half.
+    if (y >= 1 && y <= 2 && x >= 11 && x <= 12) return shade(0xd9c56a, 1);
+    const panel = y >= 5 && y <= 12 && x >= 3 && x <= 12;
+    const inset = panel && (y === 5 || y === 12 || x === 3 || x === 12);
+    if (inset) return shade(0x7a5a33, 1);
+    return shade(0x9a7446, 0.92 + hash(x >> 2, 5, 11) * 0.1 + rand() * 0.05);
+  },
+  [Tile.Ladder]: (x, y, rand) => {
+    const rail = (x >= 2 && x <= 3) || (x >= 12 && x <= 13);
+    const rung = y % 4 === 1 && x >= 2 && x <= 13;
+    if (rail) return shade(0x8a6739, 0.95 + rand() * 0.1);
+    if (rung) return shade(0xa67c47, 0.95 + rand() * 0.1);
+    return [0, 0, 0, 0];
+  },
+  // A torch is a 2 × 10 pixel post, so only the bottom-left corner of its tiles is seen.
+  [Tile.TorchSide]: (_x, y, rand) => {
+    if (y <= 7) return shade(0xffd35a, 1.05 + rand() * 0.1);
+    if (y <= 8) return shade(0xff8a2a, 1);
+    return shade(0x7a5a33, 0.9 + rand() * 0.15);
+  },
+  [Tile.TorchTop]: (_x, _y, rand) => shade(0xffe27a, 1 + rand() * 0.1),
+  [Tile.FlowerRed]: (x, y) => flower(x, y, 0xd8342c, 0x2a1a12),
+  [Tile.FlowerYellow]: (x, y) => flower(x, y, 0xf2d024, 0xe89a1c),
+  [Tile.TallGrass]: (x, y) => {
+    // Blades of different heights rising from the bottom edge.
+    const height = 5 + Math.floor(hash(x, 13, 5) * 9);
+    const blade = hash(x, 2, 8) > 0.38;
+    if (!blade || S - 1 - y >= height) return [0, 0, 0, 0];
+    return shade(0x6aaa3a, 0.8 + hash(x, y, 3) * 0.35);
+  },
 };
+
+/** A stem with two leaves and a round bloom. */
+function flower(x: number, y: number, petal: number, centre: number): Rgba {
+  const dx = x - 7.5;
+  const dy = y - 5.5;
+  const d = Math.hypot(dx, dy);
+  if (d < 1.2) return shade(centre, 1);
+  if (d < 3.3) return shade(petal, 0.9 + hash(x, y, 21) * 0.2);
+  if ((x === 7 || x === 8) && y >= 8) return shade(0x3f8a2e, x === 7 ? 1 : 0.85);
+  if (y >= 11 && y <= 12 && ((x >= 4 && x <= 6) || (x >= 9 && x <= 11))) return shade(0x4f9a35, 1);
+  return [0, 0, 0, 0];
+}
 
 /**
  * Procedurally painted block texture atlas. All art is generated at startup, so

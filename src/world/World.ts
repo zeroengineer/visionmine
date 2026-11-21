@@ -1,4 +1,5 @@
 import { Emitter } from '@/utils/Emitter';
+import { IS_OPAQUE, LIGHT_EMISSION } from './blocks/blocks';
 import { CHUNK_MASK, CHUNK_SIZE } from './constants';
 import type { Chunk } from './chunks/Chunk';
 import { blockIndex, chunkKey, isValidY, toChunkCoord } from './chunks/coords';
@@ -80,6 +81,7 @@ export class World {
       for (const [index, cell] of edits) {
         chunk.blocks[index] = cellBlock(cell);
         chunk.setMeta(index, cellMeta(cell));
+        if (LIGHT_EMISSION[cellBlock(cell)]! > 0) (chunk.emitters ??= new Set()).add(index);
       }
     }
     this.chunks.set(chunk.key, chunk);
@@ -136,6 +138,11 @@ export class World {
       this.edits.set(key, chunkEdits);
     }
     chunkEdits.set(index, packCell(id, meta));
+
+    const emits = LIGHT_EMISSION[id]! > 0;
+    const emitted = LIGHT_EMISSION[previous]! > 0;
+    if (emits) (chunk.emitters ??= new Set()).add(index);
+    else if (emitted) chunk.emitters?.delete(index);
     this.unsavedEdits.add(key);
 
     this.events.emit('chunkDirty', { key, urgent: true });
@@ -152,6 +159,18 @@ export class World {
     if (west && south) this.markDirty(cx - 1, cz + 1);
     if (east && north) this.markDirty(cx + 1, cz - 1);
     if (east && south) this.markDirty(cx + 1, cz + 1);
+    // Light reaches across chunk borders: a new or removed light, or a wall
+    // built or opened near one, changes the faces of every surrounding chunk.
+    if (
+      emits !== emitted ||
+      (IS_OPAQUE[id] !== IS_OPAQUE[previous] && this.hasEmitterNear(cx, cz))
+    ) {
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx !== 0 || dz !== 0) this.markDirty(cx + dx, cz + dz);
+        }
+      }
+    }
 
     this.events.emit('blockChanged', {
       x,
@@ -203,6 +222,17 @@ export class World {
     for (const key of [...this.chunks.keys()]) this.removeChunk(key);
     this.edits.clear();
     this.unsavedEdits.clear();
+  }
+
+  /** True when this chunk or one of its eight neighbours holds a light source. */
+  private hasEmitterNear(cx: number, cz: number): boolean {
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const emitters = this.chunks.get(chunkKey(cx + dx, cz + dz))?.emitters;
+        if (emitters && emitters.size > 0) return true;
+      }
+    }
+    return false;
   }
 
   private markDirty(cx: number, cz: number): void {

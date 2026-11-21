@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { BlockId } from '@/world/blocks/blocks';
 import { CHUNK_HEIGHT, CHUNK_SIZE, CHUNK_VOLUME, SEA_LEVEL } from '@/world/constants';
-import { sanitizeWorldConfig, type WorldConfig } from '@/world/generation/config';
+import {
+  GENERATOR_VERSION,
+  sanitizeWorldConfig,
+  type WorldConfig,
+} from '@/world/generation/config';
 import { TerrainGenerator } from '@/world/generation/TerrainGenerator';
 
 const config = (overrides: Partial<WorldConfig> = {}): WorldConfig => ({
@@ -178,11 +182,84 @@ describe('TerrainGenerator', () => {
       seed: 'visionmine',
       terrain: 'standard',
       treeDensity: 1,
+      generator: 1,
     });
     expect(sanitizeWorldConfig({ seed: 'x', terrain: 'lava', treeDensity: 99 })).toEqual({
       seed: 'x',
       terrain: 'standard',
       treeDensity: 2,
+      generator: 1,
     });
+  });
+
+  it('keeps a valid generator version and treats anything else as the first', () => {
+    const version = (generator: unknown) =>
+      sanitizeWorldConfig({ seed: 'x', terrain: 'standard', treeDensity: 1, generator }).generator;
+    expect(version(GENERATOR_VERSION)).toBe(GENERATOR_VERSION);
+    expect(version(1)).toBe(1);
+    // A save from before versions existed, or a damaged value, is version 1.
+    expect(version(undefined)).toBe(1);
+    expect(version(0)).toBe(1);
+    expect(version(1.5)).toBe(1);
+    expect(version('2')).toBe(1);
+    expect(version(GENERATOR_VERSION + 1)).toBe(1);
+  });
+});
+
+describe('generator versions', () => {
+  const PLANTS = new Set<number>([BlockId.TallGrass, BlockId.FlowerRed, BlockId.FlowerYellow]);
+
+  function chunkPair(cx: number, cz: number) {
+    const base = { seed: 'versions', terrain: 'flatlands', treeDensity: 1 } as const;
+    return {
+      v1: new TerrainGenerator({ ...base }).generateChunk(cx, cz),
+      v2: new TerrainGenerator({ ...base, generator: 2 }).generateChunk(cx, cz),
+    };
+  }
+
+  it('adds plants in version 2 and changes nothing else', () => {
+    let plants = 0;
+    for (let cx = -2; cx <= 2; cx++) {
+      for (let cz = -2; cz <= 2; cz++) {
+        const { v1, v2 } = chunkPair(cx, cz);
+        for (let i = 0; i < v1.length; i++) {
+          if (v1[i] === v2[i]) continue;
+          // The only difference allowed: air became a plant standing on grass.
+          expect(v1[i]).toBe(BlockId.Air);
+          expect(PLANTS.has(v2[i]!)).toBe(true);
+          expect(v2[i - 256]).toBe(BlockId.Grass);
+          plants++;
+        }
+        expect([...v1].some((id) => PLANTS.has(id))).toBe(false);
+      }
+    }
+    expect(plants).toBeGreaterThan(50);
+  });
+
+  it('follows the vegetation setting', () => {
+    const count = (treeDensity: number): number => {
+      const generator = new TerrainGenerator({
+        seed: 'versions',
+        terrain: 'flatlands',
+        treeDensity,
+        generator: 2,
+      });
+      let n = 0;
+      for (let cx = -2; cx <= 2; cx++) {
+        for (const id of generator.generateChunk(cx, 0)) if (PLANTS.has(id)) n++;
+      }
+      return n;
+    };
+    expect(count(0)).toBe(0);
+    const sparse = count(0.5);
+    const normal = count(1);
+    expect(sparse).toBeGreaterThan(0);
+    expect(sparse).toBeLessThan(normal);
+  });
+
+  it('is deterministic for a given version', () => {
+    const a = chunkPair(3, -4).v2;
+    const b = chunkPair(3, -4).v2;
+    expect(a).toEqual(b);
   });
 });

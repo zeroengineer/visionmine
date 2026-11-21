@@ -1,28 +1,17 @@
 import * as THREE from 'three';
 import { CHUNK_SIZE } from '@/world/constants';
-import { FACE_STRIDE, type ChunkMeshData, type FaceBatch } from '@/world/meshing/types';
+import {
+  FACE_BASIS,
+  FACE_ORIGIN,
+  FACE_STRIDE,
+  type ChunkMeshData,
+  type FaceBatch,
+} from '@/world/meshing/types';
 import type { ChunkMaterials } from './chunkMaterial';
 
-/**
- * Per-face transform basis. Each instance matrix places the shared unit quad
- * (XY plane, facing +Z, UV origin bottom-left) onto one block face:
- * columns are `u * width`, `v * height`, `normal`, and the quad centre.
- */
-const FACE_BASIS = [
-  { u: [0, 0, -1], v: [0, 1, 0], n: [1, 0, 0] },
-  { u: [0, 0, 1], v: [0, 1, 0], n: [-1, 0, 0] },
-  { u: [1, 0, 0], v: [0, 0, -1], n: [0, 1, 0] },
-  { u: [1, 0, 0], v: [0, 0, 1], n: [0, -1, 0] },
-  { u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] },
-  { u: [-1, 0, 0], v: [0, 1, 0], n: [0, 0, -1] },
-] as const;
-
-/** Position of the quad's UV origin relative to the block's min corner. */
-const FACE_ORIGIN = FACE_BASIS.map(({ u, v, n }) => [
-  0.5 + n[0] * 0.5 - u[0] * 0.5 - v[0] * 0.5,
-  0.5 + n[1] * 0.5 - u[1] * 0.5 - v[1] * 0.5,
-  0.5 + n[2] * 0.5 - u[2] * 0.5 - v[2] * 0.5,
-]);
+// Each instance matrix places the shared unit quad (XY plane, facing +Z, UV origin
+// bottom-left) onto one face: columns are `u * width`, `v * height`, `normal`, and
+// the quad centre. See FACE_BASIS for the orientation of each face.
 
 const MIN_CAPACITY = 64;
 
@@ -134,7 +123,7 @@ export class ChunkRenderer {
     // Each chunk layer owns its geometry: instanced attributes live on the geometry,
     // and sharing vertex buffers across disposable geometries is unsafe in WebGL state.
     const geometry = new THREE.PlaneGeometry(1, 1);
-    const faceAttr = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+    const faceAttr = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
     const aoAttr = new THREE.InstancedBufferAttribute(new Uint8Array(capacity * 4), 4, true);
     faceAttr.setUsage(THREE.DynamicDrawUsage);
     aoAttr.setUsage(THREE.DynamicDrawUsage);
@@ -192,10 +181,11 @@ export class ChunkRenderer {
       matrices[m + 14] = src[s + 2]! + origin[2]! + (u[2] * w + v[2] * h) * 0.5;
       matrices[m + 15] = 1;
 
-      const f = i * 3;
+      const f = i * 4;
       faces[f] = src[s + 4]!;
       faces[f + 1] = w;
       faces[f + 2] = h;
+      faces[f + 3] = src[s + 11]!;
 
       const a = i * 4;
       ao[a] = src[s + 5]! * 255;

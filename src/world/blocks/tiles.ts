@@ -22,6 +22,14 @@ export const Tile = {
   TntTop: 16,
   TntBottom: 17,
   Bedrock: 18,
+  DoorTop: 19,
+  DoorBottom: 20,
+  Ladder: 21,
+  TorchSide: 22,
+  TorchTop: 23,
+  FlowerRed: 24,
+  FlowerYellow: 25,
+  TallGrass: 26,
 } as const;
 
 export type Tile = (typeof Tile)[keyof typeof Tile];

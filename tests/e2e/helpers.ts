@@ -20,6 +20,16 @@ export const Block = {
   Glass: 10,
   Brick: 11,
   Tnt: 14,
+  StoneSlab: 16,
+  PlankStairs: 21,
+  Door: 24,
+  DoorUpper: 25,
+  Ladder: 26,
+  GlassPane: 27,
+  Torch: 28,
+  FlowerRed: 29,
+  FlowerYellow: 30,
+  TallGrass: 31,
 } as const;
 
 export const SETTINGS_KEY = 'visionmine.settings.v1';
@@ -148,6 +158,16 @@ export const game = {
   teleport: (page: Page, x: number, y: number, z: number) =>
     page.evaluate(([px, py, pz]) => window.__visionmine.teleport(px!, py!, pz!), [x, y, z]),
   save: (page: Page) => page.evaluate(() => window.__visionmine.save()),
+  getMeta: (page: Page, x: number, y: number, z: number) =>
+    page.evaluate(([bx, by, bz]) => window.__visionmine.getMeta(bx!, by!, bz!), [x, y, z]),
+  /** Writes a block directly (test set-up only). */
+  setBlock: (page: Page, x: number, y: number, z: number, block: number, meta = 0) =>
+    page.evaluate(
+      ([bx, by, bz, id, m]) => window.__visionmine.setBlock(bx!, by!, bz!, id!, m),
+      [x, y, z, block, meta],
+    ),
+  /** Puts a block in the player's hand. */
+  hold: (page: Page, block: number) => page.evaluate((id) => window.__visionmine.hold(id), block),
 };
 
 /** Presses and releases a mouse button with the pointer over the game view. */
@@ -227,4 +247,25 @@ export async function quitToMenu(page: Page): Promise<void> {
   if ((await game.screen(page)) !== 'paused') await pauseGame(page);
   await page.click(tid('pause-quit'));
   await waitForScreen(page, 'menu');
+}
+
+/** Mean brightness (0–255) of the game view, sampled right after a frame is drawn. */
+export function canvasBrightness(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        requestAnimationFrame(() => {
+          const source = document.querySelector<HTMLCanvasElement>('#game')!;
+          const copy = document.createElement('canvas');
+          copy.width = 64;
+          copy.height = 36;
+          const context = copy.getContext('2d')!;
+          context.drawImage(source, 0, 0, copy.width, copy.height);
+          const { data } = context.getImageData(0, 0, copy.width, copy.height);
+          let sum = 0;
+          for (let i = 0; i < data.length; i += 4) sum += data[i]! + data[i + 1]! + data[i + 2]!;
+          resolve(sum / ((data.length / 4) * 3));
+        });
+      }),
+  );
 }
