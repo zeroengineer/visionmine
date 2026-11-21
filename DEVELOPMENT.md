@@ -82,18 +82,19 @@ Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Uni
 - **Unit tests** (`tests/unit`, Vitest, Node) — coordinates, terrain determinism and chunk borders, world edits and dirty propagation, face meshing, collision, raycasting, block interaction, player movement, explosions, inventory, settings, persistence (in-memory and IndexedDB through `fake-indexeddb`, including corrupt data) and chunk streaming.
 - **Browser tests** (`tests/e2e`, Playwright, production build) — drive the real UI with clicks and keys and assert on world state through `window.__visionmine`:
 
-| Spec                     | Covers                                                                                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `flow.spec.ts`           | Boot to menu, rendered backdrop, create world → loading → playing, seed determinism, cancelling the form, no console errors                            |
-| `movement.spec.ts`       | Walking and stopping, jumping, gravity, flight, wall collision, mouse look                                                                             |
-| `blocks.spec.ts`         | Break, place, every hotbar block, placement refused inside the player, pick block, TNT, survival consumption and timed mining                          |
-| `inventory.spec.ts`      | Number keys and wheel, opening and closing, creative palette, moving, swapping and splitting stacks, backpack expansion, survival view                 |
-| `pause-settings.spec.ts` | Pause freezes simulation and clock, resume, Save Now, mode switch, Save & Quit and Continue, settings applied and persisted, defaults, F3              |
-| `persistence.spec.ts`    | Edits, player, view, flight and inventory restored after reload; save on leaving; survival state; Reset World; New Terrain                             |
-| `controls.spec.ts`       | Default key list, rebinding takes effect in play and survives reload, swapping on conflict, mouse ↔ key exchange, cancel, remove, reserved keys, reset |
-| `abilities.spec.ts`      | Sneaking on a ledge, double jump, dash, flying speed, auto-jump switched on in Settings, none of the creative abilities in survival                    |
-| `worlds.spec.ts`         | Empty list, ordering, play, rename (and cancel), delete with confirmation, damaged save listed and deletable                                           |
-| `performance.spec.ts`    | Chunk, geometry and texture counts while travelling 576 blocks, on returning, and after leaving and re-entering the world (Chromium only)              |
+| Spec                     | Covers                                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flow.spec.ts`           | Boot to menu, rendered backdrop, create world → loading → playing, seed determinism, cancelling the form, no console errors                                              |
+| `movement.spec.ts`       | Walking and stopping, jumping, gravity, flight, wall collision, mouse look                                                                                               |
+| `blocks.spec.ts`         | Break, place, every hotbar block, placement refused inside the player, pick block, TNT, survival consumption and timed mining                                            |
+| `inventory.spec.ts`      | Number keys and wheel, opening and closing, creative palette, moving, swapping and splitting stacks, backpack expansion, survival view                                   |
+| `pause-settings.spec.ts` | Pause freezes simulation and clock, resume, Save Now, mode switch, Save & Quit and Continue, settings applied and persisted, defaults, F3                                |
+| `persistence.spec.ts`    | Edits, player, view, flight and inventory restored after reload; save on leaving; survival state; Reset World; New Terrain                                               |
+| `controls.spec.ts`       | Default key list, rebinding takes effect in play and survives reload, swapping on conflict, mouse ↔ key exchange, cancel, remove, reserved keys, reset                   |
+| `abilities.spec.ts`      | Sneaking on a ledge, double jump, dash, flying speed, auto-jump switched on in Settings, none of the creative abilities in survival                                      |
+| `builder.spec.ts`        | Selecting a region; fill, replace, clear, copy, rotate, paste; undo and redo by menu and by key; quick swap; hide interface; screenshot download; none of it in survival |
+| `worlds.spec.ts`         | Empty list, ordering, play, rename (and cancel), delete with confirmation, damaged save listed and deletable                                                             |
+| `performance.spec.ts`    | Chunk, geometry and texture counts while travelling 576 blocks, on returning, and after leaving and re-entering the world (Chromium only)                                |
 
 Tests use real pointer lock where the browser grants it to automation (Chromium, Firefox) and the debug hook's `virtualLock()` otherwise (WebKit).
 
@@ -115,6 +116,8 @@ The WebKit mouse-look test is skipped because Playwright's WebKit does not grant
 
 - **One simulated frame ran after pausing.** The fixed-step simulation runs before the per-frame update that applied the paused flag, so a falling player moved a little further after Escape. The pause state is now applied before each simulation step (`Game.syncFrozen`).
 - **View could jerk when the mouse was captured.** Firefox reports a stale movement delta on the first mouse event after pointer lock is granted. `InputManager` now discards the first movement sample after each capture.
+- **Quick key taps could be missed** (found in Phase 15). Presses were only polled once per simulation step, so a key pressed and released between two steps did nothing. `InputManager` now queues presses until the simulation consumes them.
+- **A mouse press on the game view could be lost** (found in Phase 16, about 1 in 25 first clicks on WebKit). WebKit sometimes reports the page root, not the canvas, as the target of a press on the game view, and the game listened on the canvas only. Mouse input is now accepted on the canvas or on the bare page behind the interface.
 
 Everything else — the chunk shader, atlas orientation, face winding, sky, shadows, water, weather, worker generation, pointer lock flow, UI screens and IndexedDB saves — worked on first contact with a browser. The first browser-test run also had failures that were wrong expectations in the tests themselves; those were corrected in the tests.
 

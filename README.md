@@ -39,9 +39,15 @@ These are the defaults. Every action except looking, the hotbar digits and `Esc`
 | Place block / light TNT  | Right click                   |
 | Pick targeted block      | Middle click (creative)       |
 | Select hotbar slot       | `1`–`9` or mouse wheel        |
+| Previous hotbar slot     | `Q`                           |
+| Mark selection corner    | `X` (creative)                |
+| Build tools              | `B` (creative)                |
+| Undo / redo              | `Z` / `Y` (creative)          |
 | Inventory                | `E`                           |
 | Third-person camera      | `V`                           |
 | Debug overlay            | `F3`                          |
+| Hide interface           | `F1`                          |
+| Screenshot               | `F2`                          |
 | Pause / release mouse    | `Esc`                         |
 
 ## Features
@@ -60,6 +66,7 @@ These are the defaults. Every action except looking, the hotbar digits and `Esc`
 - Break, place and pick blocks with a highlighted target block
 - Creative mode (unlimited blocks, instant breaking, flight) and Survival mode (mine to collect, timed breaking)
 - Hotbar and expandable inventory with stack splitting and a creative block palette
+- Creative builder tools: mark two corners to select a region, then fill, replace, clear, copy, rotate and paste it; undo and redo for every edit, including explosions
 - TNT with fuses, chain reactions, knockback and camera shake
 - Third-person camera with terrain-aware distance
 

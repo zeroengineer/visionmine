@@ -21,7 +21,7 @@ src/
     persistence/ Repository interface, IndexedDB and in-memory backends, codecs
     World.ts     getBlock / setBlock facade, edits, change events
   gameplay/    Player and rules
-    player/ movement/ collision/ interaction/ inventory/ modes/
+    player/ movement/ collision/ interaction/ building/ inventory/ modes/
   rendering/   Turns world and gameplay state into Three.js objects
     chunks/      ChunkRenderer (InstancedMesh), materials, mesh scheduler
     environment/ Day/night cycle, sky dome, fog, weather
@@ -107,6 +107,7 @@ Three inputs are deliberately not actions: mouse look, the hotbar digits, and Es
 - **Movement abilities** (`gameplay/movement/PlayerController.ts`) — sneaking cancels any horizontal move that would leave the body's footprint without ground within 0.6 blocks below; `moveWithStepUp` retries a wall-blocked move from a raised position and keeps it only if the body ends up standing higher and further along (0.6 blocks normally, a full block with auto-jump), while `Player.viewOffsetY` lets the camera ease up after the body has moved. Double jump and dash are switched on per game mode through `GameModeRules`. Presses of jump and dash are read from a queue in `InputManager` (`consumePress`) as well as from held state, so a tap shorter than one simulation step is not lost.
 - **Targeting** (`gameplay/interaction/voxelRaycast.ts`) — an Amanatides–Woo DDA walks the grid from the eye along the view direction and returns the hit block and face normal. Cost depends only on reach, never on mesh size.
 - **BlockInteraction** — break, place and pick. Mode- and inventory-specific decisions are injected as `InteractionRules`, so the module does not depend on stores. Placement is refused when the new block would overlap the player's body.
+- **Builder tools** (`gameplay/building/`) — `regionOps.ts` holds pure region functions over `World` (fill, replace, clear, copy, rotate, paste) capped at 32,768 blocks and refusing regions that touch unloaded chunks. `EditHistory` listens to `World`'s `blockChanged` event and groups changes between two `commit()` calls; `WorldSession` commits after every break, placement and explosion (and once per frame as a catch-all) and `BuildTools` commits around each region operation, so one click, one explosion or one tool use is one undo step even when several happen within a single frame. `BuildTools` combines the two with the two-corner selection and the clipboard, and is switched off by game mode. `rendering/highlight/SelectionBox` draws the selection; `ui/menus/BuildMenu` drives it through `GameCommands.buildAction`.
 - **TNT** — `TntManager` counts down fuses and calls `explode`, a pure function over `World` that removes a ragged sphere and reports other TNT for chain reactions.
 
 ## State and UI
