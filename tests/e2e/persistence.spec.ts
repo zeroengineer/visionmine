@@ -171,4 +171,100 @@ test.describe('saving and loading', () => {
     );
     expect(column).not.toBe(Block.Brick);
   });
+  test('a save written before block state existed still loads', async ({ page }) => {
+    await openGame(page);
+    await createWorld(page, { name: 'Legacy', seed: 'persist' });
+    const worldId = (await game.worldId(page))!;
+    const player = await game.player(page);
+    // A free cell a few blocks above the player's head.
+    const cell = { x: Math.floor(player.x), y: Math.floor(player.y) + 4, z: Math.floor(player.z) };
+    expect(await game.getBlock(page, cell.x, cell.y, cell.z)).toBe(Block.Air);
+    await quitToMenu(page);
+
+    // Rewrite storage the way the first release left it: world record at
+    // version 1 and a chunk row without `format`, packed as `index << 8 | id`.
+    await page.evaluate(
+      ([id, c, brick]) =>
+        new Promise<void>((resolve, reject) => {
+          const open = indexedDB.open('visionmine');
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const db = open.result;
+            const tx = db.transaction(['worlds', 'chunks'], 'readwrite');
+            const worlds = tx.objectStore('worlds');
+            const get = worlds.get(id);
+            get.onsuccess = () => worlds.put({ ...get.result, version: 1 });
+            const chunkKey = ((c.x >> 4) + 0x8000) * 0x10000 + ((c.z >> 4) + 0x8000);
+            const index = (c.x & 15) + (c.z & 15) * 16 + c.y * 256;
+            tx.objectStore('chunks').put({
+              key: `${id}:${chunkKey}`,
+              worldId: id,
+              chunkKey,
+              data: new Uint32Array([(index << 8) | brick]),
+            });
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onerror = () => reject(tx.error);
+          };
+        }),
+      [worldId, cell, Block.Brick] as const,
+    );
+
+    await page.reload();
+    await waitForScreen(page, 'menu');
+    await page.click(tid('menu-continue'));
+    await waitUntilPlaying(page);
+    expect(await game.worldId(page)).toBe(worldId);
+    expect(await game.getBlock(page, cell.x, cell.y, cell.z)).toBe(Block.Brick);
+    expect(
+      await page.evaluate(
+        ([x, y, z]) => window.__visionmine.getMeta(x!, y!, z!),
+        [cell.x, cell.y, cell.z],
+      ),
+    ).toBe(0);
+
+    // New edits are saved in the current format. The old row is rewritten only
+    // when its own chunk is next saved, so it may still be in the old layout.
+    await captureMouse(page);
+    await makeEdits(page);
+    await game.save(page);
+    const rows = await page.evaluate(
+      (id) =>
+        new Promise<Array<{ format?: number; entries: number }>>((resolve, reject) => {
+          const open = indexedDB.open('visionmine');
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const db = open.result;
+            const request = db
+              .transaction('chunks', 'readonly')
+              .objectStore('chunks')
+              .index('worldId')
+              .getAll(id);
+            request.onsuccess = () => {
+              db.close();
+              resolve(
+                (request.result as Array<{ format?: number; data: Uint32Array }>).map((row) => ({
+                  format: row.format,
+                  entries: row.data.length,
+                })),
+              );
+            };
+            request.onerror = () => reject(request.error);
+          };
+        }),
+      worldId,
+    );
+    expect(rows.some((row) => row.format === 2)).toBe(true);
+    expect(rows.every((row) => row.format === 2 || row.format === undefined)).toBe(true);
+    // The old edit plus the two new ones, none lost or duplicated.
+    expect(rows.reduce((sum, row) => sum + row.entries, 0)).toBe(3);
+
+    await page.reload();
+    await waitForScreen(page, 'menu');
+    await page.click(tid('menu-continue'));
+    await waitUntilPlaying(page);
+    expect(await game.getBlock(page, cell.x, cell.y, cell.z)).toBe(Block.Brick);
+  });
 });
