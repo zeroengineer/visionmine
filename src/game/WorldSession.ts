@@ -62,6 +62,8 @@ export interface EngineContext {
   chunkMaterials: ChunkMaterials;
   environment: Environment;
   sfx: Sfx;
+  /** Opens the 3 × 3 crafting screen (the player used a crafting table). */
+  openCrafting(): void;
 }
 
 /** Saved state to restore when a session starts. Omitted fields mean "new world". */
@@ -502,6 +504,10 @@ export class WorldSession {
         if (toggleDoor(this.world, hit.x, hit.y, hit.z)) {
           this.engine.sfx.play('place');
           this.build.history.commit();
+          return true;
+        }
+        if (hit.block === BlockId.CraftingTable) {
+          this.engine.openCrafting();
           return true;
         }
         if (hit.block !== BlockId.Tnt) return false;

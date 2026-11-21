@@ -140,6 +140,30 @@
   opacity: 1;
 }
 
+.inv__craft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.inv__craft-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.inv__craft-grid .slot[hidden] {
+  display: none;
+}
+
+.inv__craft-arrow {
+  font-size: 22px;
+  color: var(--muted);
+}
+
+.slot--result {
+  border-color: rgba(141, 220, 79, 0.45);
+}
+
 /* ---- Vitals --------------------------------------------------------------- */
 .vitals {
   display: grid;
@@ -415,6 +439,13 @@
 
 .inv__grid {
   margin-top: 8px;
+}
+
+/* The palette is long; show three rows and scroll the rest. */
+.inv__palette {
+  max-height: 172px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .inv__hint {

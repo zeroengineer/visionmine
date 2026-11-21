@@ -109,6 +109,7 @@ export class Game implements GameCommands {
       chunkMaterials: this.chunkMaterials,
       environment: this.environment,
       sfx: this.sfx,
+      openCrafting: () => this.openInventory(3),
     };
     this.applySettings();
 
@@ -238,6 +239,8 @@ export class Game implements GameCommands {
 
   closeInventory(): void {
     if (uiStore.getState().screen !== 'inventory') return;
+    // Nothing is lost by closing: ingredients and the carried stack go back.
+    inventoryStore.getState().clearCraft();
     inventoryStore.getState().dropCursor();
     uiStore.getState().setScreen('playing');
     this.input.requestLock();
@@ -424,8 +427,10 @@ export class Game implements GameCommands {
     this.input.exitLock();
   }
 
-  private openInventory(): void {
+  /** Opens the inventory with a crafting grid of the given side: 2, or 3 at a crafting table. */
+  private openInventory(craftSide = 2): void {
     if (uiStore.getState().screen !== 'playing') return;
+    inventoryStore.getState().openCraft(craftSide);
     uiStore.getState().setScreen('inventory');
     this.releaseMouse();
   }

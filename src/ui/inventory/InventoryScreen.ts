@@ -1,15 +1,11 @@
+import { GRID_CELLS, GRID_SIDE, gridCells } from '@/gameplay/crafting/recipes';
 import { GAME_MODES } from '@/gameplay/modes/gameMode';
-import {
-  HOTBAR_SIZE,
-  MAX_BAG_ROWS,
-  PALETTE_BLOCKS,
-  ROW_SIZE,
-} from '@/gameplay/inventory/inventory';
+import { HOTBAR_SIZE, MAX_BAG_ROWS, PALETTE_ITEMS, ROW_SIZE } from '@/gameplay/inventory/inventory';
 import { inventoryStore } from '@/state/inventoryStore';
 import { sessionStore } from '@/state/sessionStore';
 import { uiStore } from '@/state/uiStore';
-import { getBlockDef } from '@/world/blocks/blocks';
-import { blockIconUrl } from '../components/blockIcon';
+import { getItemDef } from '@/gameplay/items/items';
+import { itemIconUrl } from '../components/blockIcon';
 import { h, type View } from '../components/dom';
 import { createSlotElement, renderSlot, type SlotElement } from '../components/slot';
 
@@ -44,6 +40,41 @@ export function createInventoryScreen(options: InventoryScreenOptions): View {
   const modeBadge = h('span', { class: 'badge' });
   const hint = h('p', { class: 'inv__hint' });
   const cursorView = createSlotElement('slot--cursor');
+  const title = h('h2', { class: 'panel__title', text: 'Inventory' });
+
+  // Crafting: a grid of ingredients and the slot that shows what they make.
+  const craftGrid = h('div', { class: 'inv__craft-grid', attrs: { 'data-testid': 'craft-grid' } });
+  const craftViews = Array.from({ length: GRID_CELLS }, (_, index) => {
+    const view = createSlotElement('slot--interactive');
+    view.el.dataset.craft = String(index);
+    view.el.addEventListener('mousedown', (event) => {
+      if (event.button !== 0 && event.button !== 2) return;
+      event.preventDefault();
+      store.getState().clickCraft(index, event.button === 2);
+    });
+    craftGrid.append(view.el);
+    return view;
+  });
+  const resultView = createSlotElement('slot--interactive slot--result');
+  resultView.el.dataset.testid = 'craft-result';
+  resultView.el.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    store.getState().takeCraftResult();
+  });
+  const craftHeading = h('h3', { class: 'inv__heading', text: 'Crafting' });
+  const craftSection = h(
+    'section',
+    { class: 'inv__section' },
+    craftHeading,
+    h(
+      'div',
+      { class: 'inv__craft' },
+      craftGrid,
+      h('span', { class: 'inv__craft-arrow', text: '→', attrs: { 'aria-hidden': 'true' } }),
+      resultView.el,
+    ),
+  );
 
   const panel = h(
     'div',
@@ -51,7 +82,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): View {
     h(
       'header',
       { class: 'panel__header' },
-      h('h2', { class: 'panel__title', text: 'Inventory' }),
+      title,
       modeBadge,
       h('button', {
         class: 'btn btn--ghost btn--small',
@@ -61,6 +92,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): View {
       }),
     ),
     paletteSection,
+    craftSection,
     h(
       'section',
       { class: 'inv__section' },
@@ -85,19 +117,19 @@ export function createInventoryScreen(options: InventoryScreenOptions): View {
   el.hidden = true;
 
   // Palette entries never change, so they are built once.
-  for (const block of PALETTE_BLOCKS) {
-    const def = getBlockDef(block);
+  for (const item of PALETTE_ITEMS) {
+    const name = getItemDef(item).name;
     palette.append(
       h(
         'button',
         {
           class: 'slot slot--palette',
-          attrs: { type: 'button', title: def.name, 'aria-label': def.name },
-          on: { click: () => store.getState().grab(block) },
+          attrs: { type: 'button', title: name, 'aria-label': name },
+          on: { click: () => store.getState().grab(item) },
         },
         h('img', {
           class: 'slot__icon',
-          attrs: { src: blockIconUrl(block), alt: '', draggable: 'false' },
+          attrs: { src: itemIconUrl(item), alt: '', draggable: 'false' },
         }),
       ),
     );
@@ -118,13 +150,23 @@ export function createInventoryScreen(options: InventoryScreenOptions): View {
   };
 
   const render = (): void => {
-    const { slots, selected, cursor } = store.getState();
+    const { slots, selected, cursor, craft, craftSide, craftResult } = store.getState();
     const rules = GAME_MODES[sessionStore.getState().mode];
     ensureSlots(slots.length);
     slotViews.forEach((view, i) => {
       renderSlot(view, slots[i] ?? null, false);
       view.el.classList.toggle('is-selected', i === selected);
     });
+    const used = gridCells(craftSide);
+    craftViews.forEach((view, i) => {
+      view.el.hidden = !used.includes(i);
+      renderSlot(view, craft[i] ?? null, false);
+    });
+    craftGrid.style.gridTemplateColumns = `repeat(${craftSide}, 52px)`;
+    renderSlot(resultView, craftResult, false);
+    const atTable = craftSide === GRID_SIDE;
+    title.textContent = atTable ? 'Crafting Table' : 'Inventory';
+    craftHeading.textContent = atTable ? 'Crafting (3 × 3)' : 'Crafting (2 × 2)';
     renderSlot(cursorView, cursor, false);
     cursorView.el.hidden = cursor === null;
 
@@ -151,6 +193,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): View {
     store.subscribe((s) => s.slots, render),
     store.subscribe((s) => s.selected, render),
     store.subscribe((s) => s.cursor, render),
+    store.subscribe((s) => s.craft, render),
+    store.subscribe((s) => s.craftSide, render),
     sessionStore.subscribe((s) => s.mode, render),
     uiStore.subscribe(
       (s) => s.screen,

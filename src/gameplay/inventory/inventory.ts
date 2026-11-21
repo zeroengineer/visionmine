@@ -1,5 +1,5 @@
 import { BlockId, PLACEABLE_BLOCKS } from '@/world/blocks/blocks';
-import { getItemDef, isBlockItem, isValidItem } from '../items/items';
+import { getItemDef, isBlockItem, isValidItem, NON_BLOCK_ITEMS } from '../items/items';
 import type { GameMode } from '../modes/gameMode';
 
 export interface ItemStack {
@@ -151,10 +151,53 @@ export function countOf(inventory: Inventory, block: number): number {
 }
 
 /**
- * Resolves a click on a slot while the pointer may be carrying a stack.
+ * Resolves a click on one cell while the pointer may be carrying a stack.
  * Primary click: pick up / put down / merge / swap. Secondary click: take half
  * or drop a single item.
  */
+export function clickCell(
+  slot: Slot,
+  cursor: Slot,
+  secondary = false,
+): { slot: Slot; cursor: Slot } {
+  if (!cursor) {
+    if (!slot) return { slot, cursor };
+    if (secondary && slot.count > 1) {
+      const taken = Math.ceil(slot.count / 2);
+      return {
+        slot: { item: slot.item, count: slot.count - taken },
+        cursor: { item: slot.item, count: taken },
+      };
+    }
+    return { slot: null, cursor: slot };
+  }
+
+  if (!slot) {
+    if (secondary && cursor.count > 1) {
+      return {
+        slot: { item: cursor.item, count: 1 },
+        cursor: { item: cursor.item, count: cursor.count - 1 },
+      };
+    }
+    return { slot: cursor, cursor: null };
+  }
+
+  // Tools never stack, so two of the same tool swap like different items.
+  if (slot.item === cursor.item && stackLimit(slot.item) > 1) {
+    const moved = Math.min(secondary ? 1 : cursor.count, stackLimit(slot.item) - slot.count);
+    if (moved <= 0) return { slot, cursor };
+    const left = cursor.count - moved;
+    return {
+      slot: { item: slot.item, count: slot.count + moved },
+      cursor: left > 0 ? { item: cursor.item, count: left } : null,
+    };
+  }
+
+  // Different items: swap.
+  return { slot: cursor, cursor: slot };
+}
+
+/** `clickCell` applied to a slot of the inventory. */
 export function clickSlot(
   inventory: Inventory,
   cursor: Slot,
@@ -162,43 +205,15 @@ export function clickSlot(
   secondary = false,
 ): { inventory: Inventory; cursor: Slot } {
   if (index < 0 || index >= inventory.slots.length) return { inventory, cursor };
-  const slot = inventory.slots[index] ?? null;
+  const current = inventory.slots[index] ?? null;
+  const result = clickCell(current, cursor, secondary);
+  if (result.slot === current && result.cursor === cursor) return { inventory, cursor };
+  return { inventory: setSlot(inventory, index, result.slot), cursor: result.cursor };
+}
 
-  if (!cursor) {
-    if (!slot) return { inventory, cursor };
-    if (secondary && slot.count > 1) {
-      const taken = Math.ceil(slot.count / 2);
-      return {
-        inventory: setSlot(inventory, index, { item: slot.item, count: slot.count - taken }),
-        cursor: { item: slot.item, count: taken },
-      };
-    }
-    return { inventory: setSlot(inventory, index, null), cursor: slot };
-  }
-
-  if (!slot) {
-    if (secondary && cursor.count > 1) {
-      return {
-        inventory: setSlot(inventory, index, { item: cursor.item, count: 1 }),
-        cursor: { item: cursor.item, count: cursor.count - 1 },
-      };
-    }
-    return { inventory: setSlot(inventory, index, cursor), cursor: null };
-  }
-
-  // Tools never stack, so two of the same tool swap like different items.
-  if (slot.item === cursor.item && stackLimit(slot.item) > 1) {
-    const moved = Math.min(secondary ? 1 : cursor.count, stackLimit(slot.item) - slot.count);
-    if (moved <= 0) return { inventory, cursor };
-    const left = cursor.count - moved;
-    return {
-      inventory: setSlot(inventory, index, { item: slot.item, count: slot.count + moved }),
-      cursor: left > 0 ? { item: cursor.item, count: left } : null,
-    };
-  }
-
-  // Different items: swap.
-  return { inventory: setSlot(inventory, index, cursor), cursor: slot };
+/** Largest stack of an item, exported for code that merges stacks outside the inventory. */
+export function maxStackOf(item: number): number {
+  return stackLimit(item);
 }
 
 export function canExpand(inventory: Inventory): boolean {
@@ -261,8 +276,11 @@ export function sanitizeInventory(raw: unknown): Inventory {
   return { slots, selected };
 }
 
-/** Every block that can appear in the creative palette. */
-export const PALETTE_BLOCKS: readonly BlockId[] = PLACEABLE_BLOCKS;
+/** Everything offered by the creative palette: every placeable block, then the other items. */
+export const PALETTE_ITEMS: readonly number[] = [
+  ...PLACEABLE_BLOCKS,
+  ...NON_BLOCK_ITEMS.map((item) => item.id),
+];
 
 /** The block the selected stack would place, or 0 when the hand is empty or holds a non-block item. */
 export function selectedBlock(inventory: Inventory): number {
