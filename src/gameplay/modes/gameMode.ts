@@ -8,6 +8,9 @@ export interface GameModeRules {
   canFly: boolean;
   /** Targeting distance in blocks. */
   reach: number;
+  /** Extra jumps allowed before landing. */
+  airJumps: number;
+  canDash: boolean;
 }
 
 export const GAME_MODES: Record<GameMode, GameModeRules> = {
@@ -17,6 +20,8 @@ export const GAME_MODES: Record<GameMode, GameModeRules> = {
     infiniteBlocks: true,
     canFly: true,
     reach: 8,
+    airJumps: 1,
+    canDash: true,
   },
   survival: {
     label: 'Survival',
@@ -24,6 +29,8 @@ export const GAME_MODES: Record<GameMode, GameModeRules> = {
     infiniteBlocks: false,
     canFly: false,
     reach: 5.5,
+    airJumps: 0,
+    canDash: false,
   },
 };
 

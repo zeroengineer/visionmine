@@ -3,13 +3,7 @@ import { Emitter } from '@/utils/Emitter';
 import { BlockId, getBlockDef, IS_LIQUID, IS_SOLID } from '@/world/blocks/blocks';
 import { isValidY } from '@/world/chunks/coords';
 import type { World } from '@/world/World';
-import {
-  PLAYER_EYE_HEIGHT,
-  PLAYER_HALF_WIDTH,
-  PLAYER_HEIGHT,
-  type Player,
-  type Vec3Like,
-} from '../player/Player';
+import { PLAYER_HALF_WIDTH, PLAYER_HEIGHT, type Player, type Vec3Like } from '../player/Player';
 import { createRaycastHit, raycastVoxels, type RaycastHit } from './voxelRaycast';
 
 /** Game-mode and inventory decisions the interaction system delegates. */
@@ -151,7 +145,7 @@ export class BlockInteraction {
     this.hasTarget = raycastVoxels(
       this.world,
       position.x,
-      position.y + PLAYER_EYE_HEIGHT,
+      position.y + this.player.eyeHeight,
       position.z,
       dir.x,
       dir.y,

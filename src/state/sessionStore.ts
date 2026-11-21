@@ -13,10 +13,13 @@ export interface SessionState {
   /** The camera is below the water surface. */
   underwater: boolean;
   saveStatus: SaveStatus;
+  /** Flying speed multiplier chosen by the player (1 = normal). */
+  flySpeed: number;
   setWorld(world: { id: string; name: string; seed: string; mode: GameMode } | null): void;
   setMode(mode: GameMode): void;
   setUnderwater(underwater: boolean): void;
   setSaveStatus(status: SaveStatus): void;
+  setFlySpeed(scale: number): void;
 }
 
 /** State of the world currently being played that the UI needs to observe. */
@@ -28,6 +31,7 @@ export const sessionStore = createStore<SessionState>()(
     mode: 'creative',
     underwater: false,
     saveStatus: 'idle',
+    flySpeed: 1,
     setWorld(world) {
       if (!world) set({ worldId: null, worldName: '', seed: '', saveStatus: 'idle' });
       else set({ worldId: world.id, worldName: world.name, seed: world.seed, mode: world.mode });
@@ -35,5 +39,6 @@ export const sessionStore = createStore<SessionState>()(
     setMode: (mode) => set({ mode }),
     setUnderwater: (underwater) => set({ underwater }),
     setSaveStatus: (saveStatus) => set({ saveStatus }),
+    setFlySpeed: (flySpeed) => set({ flySpeed }),
   })),
 );

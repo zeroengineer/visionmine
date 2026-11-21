@@ -23,6 +23,10 @@ export interface Settings {
   /** Mouse sensitivity multiplier (1 = default). */
   sensitivity: number;
   invertY: boolean;
+  /** Climb one-block ledges without pressing jump. */
+  autoJump: boolean;
+  /** Sprint key toggles sprinting instead of being held. */
+  sprintToggle: boolean;
   weather: boolean;
   /** Length of a full day/night cycle in minutes. */
   dayLengthMinutes: number;
@@ -58,6 +62,8 @@ function defaults(): Settings {
     fov: 75,
     sensitivity: 1,
     invertY: false,
+    autoJump: false,
+    sprintToggle: false,
     weather: true,
     dayLengthMinutes: 12,
     volume: 0.6,
@@ -96,6 +102,8 @@ export function sanitizeSettings(raw: unknown, base: Settings): Settings {
     fov: clampNumber(r.fov, L.fov.min, L.fov.max, base.fov),
     sensitivity: clampNumber(r.sensitivity, L.sensitivity.min, L.sensitivity.max, base.sensitivity),
     invertY: bool(r.invertY, base.invertY),
+    autoJump: bool(r.autoJump, base.autoJump),
+    sprintToggle: bool(r.sprintToggle, base.sprintToggle),
     weather: bool(r.weather, base.weather),
     dayLengthMinutes: clampNumber(
       r.dayLengthMinutes,

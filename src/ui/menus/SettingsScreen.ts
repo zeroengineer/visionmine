@@ -59,6 +59,18 @@ export function createSettingsScreen(): View {
     onChange: (sensitivity) => set({ sensitivity }),
   });
   const invertY = toggleField('Invert vertical look', s.invertY, (invertY) => set({ invertY }));
+  const autoJump = toggleField(
+    'Auto-jump',
+    s.autoJump,
+    (autoJump) => set({ autoJump }),
+    'Climb one-block ledges without pressing jump.',
+  );
+  const sprintToggle = toggleField(
+    'Toggle sprint',
+    s.sprintToggle,
+    (sprintToggle) => set({ sprintToggle }),
+    'Press the sprint key once instead of holding it.',
+  );
   const dayLength = sliderField('Day length', {
     ...L.dayLengthMinutes,
     step: 1,
@@ -92,6 +104,8 @@ export function createSettingsScreen(): View {
     fov.set(state.fov);
     sensitivity.set(state.sensitivity);
     invertY.set(state.invertY);
+    autoJump.set(state.autoJump);
+    sprintToggle.set(state.sprintToggle);
     dayLength.set(state.dayLengthMinutes);
     volume.set(state.volume);
     debug.set(state.showDebug);
@@ -115,7 +129,15 @@ export function createSettingsScreen(): View {
     controls: h(
       'div',
       { class: 'settings__panel' },
-      h('div', { class: 'settings__mouse' }, fov.row, sensitivity.row, invertY.row),
+      h(
+        'div',
+        { class: 'settings__mouse' },
+        fov.row,
+        sensitivity.row,
+        invertY.row,
+        autoJump.row,
+        sprintToggle.row,
+      ),
       bindings.el,
     ),
     world: h('div', { class: 'settings__panel' }, dayLength.row, volume.row, debug.row),

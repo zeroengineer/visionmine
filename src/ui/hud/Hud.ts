@@ -15,6 +15,14 @@ export function createHud(commands: GameCommands): View {
   const debug = createDebugOverlay(commands);
   const crosshair = createCrosshair();
   const modeBadge = h('div', { class: 'hud__mode' });
+  const notice = h('div', { class: 'hud__notice', attrs: { 'data-testid': 'hud-notice' } });
+  let noticeTimer = 0;
+  const showNotice = (text: string): void => {
+    notice.textContent = text;
+    notice.classList.add('is-visible');
+    window.clearTimeout(noticeTimer);
+    noticeTimer = window.setTimeout(() => notice.classList.remove('is-visible'), 1600);
+  };
   const hint = h(
     'div',
     { class: 'hud__hint', attrs: { 'data-testid': 'click-to-play' } },
@@ -28,6 +36,7 @@ export function createHud(commands: GameCommands): View {
     underwater.el,
     crosshair,
     modeBadge,
+    notice,
     debug.el,
     hotbar.el,
     hint,
@@ -49,6 +58,10 @@ export function createHud(commands: GameCommands): View {
       (mode) => (modeBadge.textContent = GAME_MODES[mode].label),
       { fireImmediately: true },
     ),
+    sessionStore.subscribe(
+      (s) => s.flySpeed,
+      (scale) => showNotice(`Fly speed ${scale.toFixed(2)}×`),
+    ),
   ];
   refresh();
 
@@ -56,6 +69,7 @@ export function createHud(commands: GameCommands): View {
     el,
     dispose() {
       for (const unsubscribe of unsubscribers) unsubscribe();
+      window.clearTimeout(noticeTimer);
       underwater.dispose();
       hotbar.dispose();
       debug.dispose();
