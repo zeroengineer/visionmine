@@ -4,6 +4,7 @@ import { BlockId, getBlockDef, IS_LIQUID, IS_SOLID } from '@/world/blocks/blocks
 import { isValidY } from '@/world/chunks/coords';
 import type { World } from '@/world/World';
 import { PLAYER_HALF_WIDTH, PLAYER_HEIGHT, type Player, type Vec3Like } from '../player/Player';
+import { placementMeta } from './placement';
 import { createRaycastHit, raycastVoxels, type RaycastHit } from './voxelRaycast';
 
 /** Game-mode and inventory decisions the interaction system delegates. */
@@ -177,7 +178,8 @@ export class BlockInteraction {
     const y = this.hit.y + this.hit.ny;
     const z = this.hit.z + this.hit.nz;
     if (!canPlaceBlock(this.world, x, y, z, block, this.player.position)) return false;
-    if (!this.world.setBlock(x, y, z, block)) return false;
+    const meta = placementMeta(block, this.hit, this.player.yaw);
+    if (!this.world.setBlock(x, y, z, block, meta)) return false;
     this.events.emit('placed', { x, y, z, block });
     this.rules.onPlaced(block);
     this.retarget();

@@ -1,4 +1,5 @@
 import { BlockId, getBlockDef } from '@/world/blocks/blocks';
+import { rotateMeta } from '@/world/blocks/shapes';
 import { CHUNK_HEIGHT } from '@/world/constants';
 import type { World } from '@/world/World';
 
@@ -130,7 +131,8 @@ export function rotateClipboard(clipboard: Clipboard): Clipboard {
         const from = x + z * sx + y * sx * sz;
         const to = nx + nz * sz + y * sz * sx;
         rotated[to] = blocks[from]!;
-        rotatedMeta[to] = meta[from]!;
+        // Stairs, doors and the like turn with the copy.
+        rotatedMeta[to] = rotateMeta(getBlockDef(blocks[from]!).shape, meta[from]!);
       }
     }
   }

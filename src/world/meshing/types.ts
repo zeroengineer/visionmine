@@ -31,3 +31,32 @@ export type ChunkLookup = (cx: number, cz: number) => Chunk | undefined;
 export interface ChunkMesher {
   mesh(chunk: Chunk, lookup: ChunkLookup): ChunkMeshData;
 }
+
+/**
+ * Orientation of each face's quad: `u` and `v` are the directions of the quad's
+ * texture axes and `n` its outward normal. Faces 0–5 follow `Face` order.
+ */
+export const FACE_BASIS: ReadonlyArray<{
+  readonly u: readonly [number, number, number];
+  readonly v: readonly [number, number, number];
+  readonly n: readonly [number, number, number];
+}> = [
+  { u: [0, 0, -1], v: [0, 1, 0], n: [1, 0, 0] },
+  { u: [0, 0, 1], v: [0, 1, 0], n: [-1, 0, 0] },
+  { u: [1, 0, 0], v: [0, 0, -1], n: [0, 1, 0] },
+  { u: [1, 0, 0], v: [0, 0, 1], n: [0, -1, 0] },
+  { u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] },
+  { u: [-1, 0, 0], v: [0, 1, 0], n: [0, 0, -1] },
+];
+
+/**
+ * Where the quad's texture origin sits relative to the `x, y, z` stored for a
+ * face, for a quad covering a whole block face.
+ */
+export const FACE_ORIGIN: ReadonlyArray<readonly [number, number, number]> = FACE_BASIS.map(
+  ({ u, v, n }) => [
+    0.5 + n[0] * 0.5 - u[0] * 0.5 - v[0] * 0.5,
+    0.5 + n[1] * 0.5 - u[1] * 0.5 - v[1] * 0.5,
+    0.5 + n[2] * 0.5 - u[2] * 0.5 - v[2] * 0.5,
+  ],
+);

@@ -1,3 +1,4 @@
+import { shapeBoxes, type Box, type Shape } from './shapes';
 import { Tile } from './tiles';
 
 export const BlockId = {
@@ -17,6 +18,14 @@ export const BlockId = {
   Gravel: 13,
   Tnt: 14,
   Bedrock: 15,
+  StoneSlab: 16,
+  PlankSlab: 17,
+  CobbleSlab: 18,
+  BrickSlab: 19,
+  StoneStairs: 20,
+  PlankStairs: 21,
+  CobbleStairs: 22,
+  BrickStairs: 23,
 } as const;
 
 export type BlockId = (typeof BlockId)[keyof typeof BlockId];
@@ -37,6 +46,8 @@ export interface BlockDef {
   readonly tiles: readonly [Tile, Tile, Tile, Tile, Tile, Tile];
   /** Seconds of mining needed in survival mode. */
   readonly hardness: number;
+  /** Geometry; anything but `cube` is described by boxes in shapes.ts. */
+  readonly shape: Shape;
   readonly breakable: boolean;
   /** Can be held in the inventory and placed by the player. */
   readonly placeable: boolean;
@@ -60,7 +71,7 @@ function def(
   hardness: number,
   overrides: Partial<Omit<BlockDef, 'id' | 'key' | 'name' | 'tiles' | 'color' | 'hardness'>> = {},
 ): BlockDef {
-  return {
+  const block: BlockDef = {
     id,
     key,
     name,
@@ -70,11 +81,17 @@ function def(
     solid: true,
     opaque: true,
     liquid: false,
+    shape: 'cube',
     breakable: true,
     placeable: true,
     ...overrides,
   };
+  BLOCKS_BY_ID.set(id, block);
+  return block;
 }
+
+/** Filled as definitions are created, so later ones can derive from earlier ones. */
+const BLOCKS_BY_ID = new Map<number, BlockDef>();
 
 export const BLOCKS: readonly BlockDef[] = [
   def(BlockId.Air, 'air', 'Air', Tile.Dirt, 0x000000, 0, {
@@ -128,7 +145,27 @@ export const BLOCKS: readonly BlockDef[] = [
     breakable: false,
     placeable: false,
   }),
+  shaped(BlockId.StoneSlab, 'stone_slab', 'Stone Slab', BlockId.Stone, 'slab'),
+  shaped(BlockId.PlankSlab, 'plank_slab', 'Plank Slab', BlockId.Planks, 'slab'),
+  shaped(BlockId.CobbleSlab, 'cobble_slab', 'Cobblestone Slab', BlockId.Cobblestone, 'slab'),
+  shaped(BlockId.BrickSlab, 'brick_slab', 'Brick Slab', BlockId.Brick, 'slab'),
+  shaped(BlockId.StoneStairs, 'stone_stairs', 'Stone Stairs', BlockId.Stone, 'stairs'),
+  shaped(BlockId.PlankStairs, 'plank_stairs', 'Plank Stairs', BlockId.Planks, 'stairs'),
+  shaped(
+    BlockId.CobbleStairs,
+    'cobble_stairs',
+    'Cobblestone Stairs',
+    BlockId.Cobblestone,
+    'stairs',
+  ),
+  shaped(BlockId.BrickStairs, 'brick_stairs', 'Brick Stairs', BlockId.Brick, 'stairs'),
 ];
+
+/** A slab or stairs cut from an existing block: same look and hardness, different geometry. */
+function shaped(id: BlockId, key: string, name: string, base: BlockId, shape: Shape): BlockDef {
+  const source = BLOCKS_BY_ID.get(base)!;
+  return { ...source, id, key, name, shape, opaque: false };
+}
 
 export const BLOCK_COUNT = BLOCKS.length;
 
@@ -136,6 +173,8 @@ export const BLOCK_COUNT = BLOCKS.length;
 export const IS_SOLID = new Uint8Array(256);
 export const IS_OPAQUE = new Uint8Array(256);
 export const IS_LIQUID = new Uint8Array(256);
+/** 1 for full cubes; everything else needs `blockBoxes`. Air counts as a cube. */
+export const IS_CUBE = new Uint8Array(256).fill(1);
 /** `FACE_TILES[id * 6 + face]` → atlas tile index. */
 export const FACE_TILES = new Uint8Array(256 * 6);
 
@@ -143,11 +182,17 @@ for (const block of BLOCKS) {
   IS_SOLID[block.id] = block.solid ? 1 : 0;
   IS_OPAQUE[block.id] = block.opaque ? 1 : 0;
   IS_LIQUID[block.id] = block.liquid ? 1 : 0;
+  IS_CUBE[block.id] = block.shape === 'cube' ? 1 : 0;
   for (let face = 0; face < 6; face++) FACE_TILES[block.id * 6 + face] = block.tiles[face]!;
 }
 
 export function isValidBlockId(id: unknown): id is BlockId {
   return typeof id === 'number' && Number.isInteger(id) && id >= 0 && id < BLOCK_COUNT;
+}
+
+/** Boxes occupied by a block in a given state, in block-local coordinates. */
+export function blockBoxes(id: number, meta: number): readonly Box[] {
+  return shapeBoxes(getBlockDef(id).shape, meta);
 }
 
 export function getBlockDef(id: number): BlockDef {

@@ -1,8 +1,10 @@
-import { IS_SOLID } from '@/world/blocks/blocks';
+import { blockBoxes, IS_CUBE, IS_SOLID } from '@/world/blocks/blocks';
 
 /** Anything that can answer "which block is at this integer position". */
 export interface BlockQuery {
   getBlock(x: number, y: number, z: number): number;
+  /** State byte of the block; needed only for blocks that are not full cubes. */
+  getMeta?(x: number, y: number, z: number): number;
 }
 
 export interface MoveResult {
@@ -21,7 +23,67 @@ const EPSILON = 1e-4;
 /** Largest displacement resolved in a single pass; keeps snapping exact for 1-block cells. */
 const MAX_STEP = 0.45;
 
-/** True when the box overlaps at least one solid block. */
+/** Boxes that merely touch do not overlap. */
+const TOUCH = 1e-9;
+
+/**
+ * Visits every solid box overlapping the query box and returns, over all of
+ * them, the largest upper bound (`wantMax`) or smallest lower bound on `axis`
+ * (0 = x, 1 = y, 2 = z). Returns NaN when nothing overlaps.
+ */
+function overlapBound(
+  blocks: BlockQuery,
+  minX: number,
+  minY: number,
+  minZ: number,
+  maxX: number,
+  maxY: number,
+  maxZ: number,
+  axis: number,
+  wantMax: boolean,
+): number {
+  const x0 = Math.floor(minX);
+  const x1 = Math.floor(maxX - TOUCH);
+  const y0 = Math.floor(minY);
+  const y1 = Math.floor(maxY - TOUCH);
+  const z0 = Math.floor(minZ);
+  const z1 = Math.floor(maxZ - TOUCH);
+  let bound = Number.NaN;
+  for (let y = y0; y <= y1; y++) {
+    for (let z = z0; z <= z1; z++) {
+      for (let x = x0; x <= x1; x++) {
+        const id = blocks.getBlock(x, y, z);
+        if (IS_SOLID[id] !== 1) continue;
+        if (IS_CUBE[id] === 1) {
+          const cell = axis === 0 ? x : axis === 1 ? y : z;
+          const value = wantMax ? cell + 1 : cell;
+          if (!(wantMax ? value <= bound : value >= bound)) bound = value;
+          continue;
+        }
+        const boxes = blockBoxes(id, blocks.getMeta?.(x, y, z) ?? 0);
+        for (let i = 0; i < boxes.length; i++) {
+          const b = boxes[i]!;
+          if (
+            minX >= x + b[3] - TOUCH ||
+            maxX <= x + b[0] + TOUCH ||
+            minY >= y + b[4] - TOUCH ||
+            maxY <= y + b[1] + TOUCH ||
+            minZ >= z + b[5] - TOUCH ||
+            maxZ <= z + b[2] + TOUCH
+          ) {
+            continue;
+          }
+          const origin = axis === 0 ? x : axis === 1 ? y : z;
+          const value = origin + (wantMax ? b[axis + 3]! : b[axis]!);
+          if (!(wantMax ? value <= bound : value >= bound)) bound = value;
+        }
+      }
+    }
+  }
+  return bound;
+}
+
+/** True when the box overlaps at least one solid block (or one box of a shaped block). */
 export function boxCollides(
   blocks: BlockQuery,
   minX: number,
@@ -31,20 +93,29 @@ export function boxCollides(
   maxY: number,
   maxZ: number,
 ): boolean {
-  const x0 = Math.floor(minX);
-  const x1 = Math.floor(maxX - 1e-9);
-  const y0 = Math.floor(minY);
-  const y1 = Math.floor(maxY - 1e-9);
-  const z0 = Math.floor(minZ);
-  const z1 = Math.floor(maxZ - 1e-9);
-  for (let y = y0; y <= y1; y++) {
-    for (let z = z0; z <= z1; z++) {
-      for (let x = x0; x <= x1; x++) {
-        if (IS_SOLID[blocks.getBlock(x, y, z)] === 1) return true;
-      }
-    }
-  }
-  return false;
+  return !Number.isNaN(overlapBound(blocks, minX, minY, minZ, maxX, maxY, maxZ, 0, true));
+}
+
+/** Bound on `axis` of the solid boxes a player-shaped box standing at `feet` overlaps, or NaN. */
+function bodyBound(
+  blocks: BlockQuery,
+  feet: Vec3Like,
+  halfWidth: number,
+  height: number,
+  axis: number,
+  wantMax: boolean,
+): number {
+  return overlapBound(
+    blocks,
+    feet.x - halfWidth,
+    feet.y,
+    feet.z - halfWidth,
+    feet.x + halfWidth,
+    feet.y + height,
+    feet.z + halfWidth,
+    axis,
+    wantMax,
+  );
 }
 
 /** True when a player-shaped box standing at `feet` overlaps solid blocks. */
@@ -93,12 +164,15 @@ export function moveAndCollide(
     const dy = velocity.y * stepDt;
     if (dy !== 0) {
       position.y += dy;
-      if (bodyCollides(blocks, position, halfWidth, height)) {
+      // Push back out to the face of whatever was hit: the top of the highest
+      // box when falling, the underside of the lowest when rising.
+      const bound = bodyBound(blocks, position, halfWidth, height, 1, dy < 0);
+      if (!Number.isNaN(bound)) {
         if (dy < 0) {
-          position.y = Math.floor(position.y) + 1;
+          position.y = bound;
           result.onGround = true;
         } else {
-          position.y = Math.floor(position.y + height) - height - EPSILON;
+          position.y = bound - height - EPSILON;
           result.hitCeiling = true;
         }
         velocity.y = 0;
@@ -108,11 +182,9 @@ export function moveAndCollide(
     const dx = velocity.x * stepDt;
     if (dx !== 0) {
       position.x += dx;
-      if (bodyCollides(blocks, position, halfWidth, height)) {
-        position.x =
-          dx > 0
-            ? Math.floor(position.x + halfWidth) - halfWidth - EPSILON
-            : Math.floor(position.x - halfWidth) + 1 + halfWidth + EPSILON;
+      const bound = bodyBound(blocks, position, halfWidth, height, 0, dx < 0);
+      if (!Number.isNaN(bound)) {
+        position.x = dx > 0 ? bound - halfWidth - EPSILON : bound + halfWidth + EPSILON;
         velocity.x = 0;
         result.hitWall = true;
       }
@@ -121,11 +193,9 @@ export function moveAndCollide(
     const dz = velocity.z * stepDt;
     if (dz !== 0) {
       position.z += dz;
-      if (bodyCollides(blocks, position, halfWidth, height)) {
-        position.z =
-          dz > 0
-            ? Math.floor(position.z + halfWidth) - halfWidth - EPSILON
-            : Math.floor(position.z - halfWidth) + 1 + halfWidth + EPSILON;
+      const bound = bodyBound(blocks, position, halfWidth, height, 2, dz < 0);
+      if (!Number.isNaN(bound)) {
+        position.z = dz > 0 ? bound - halfWidth - EPSILON : bound + halfWidth + EPSILON;
         velocity.z = 0;
         result.hitWall = true;
       }

@@ -1,7 +1,10 @@
-import { FACE_TILES, IS_LIQUID, IS_OPAQUE } from '../blocks/blocks';
+import { blockBoxes, FACE_TILES, IS_CUBE, IS_LIQUID, IS_OPAQUE } from '../blocks/blocks';
+import type { Box } from '../blocks/shapes';
 import { CHUNK_HEIGHT, CHUNK_SIZE } from '../constants';
 import type { Chunk } from '../chunks/Chunk';
 import {
+  FACE_BASIS,
+  FACE_ORIGIN,
   FACE_STRIDE,
   type ChunkLookup,
   type ChunkMeshData,
@@ -15,19 +18,9 @@ const PAD_AREA = PAD * PAD;
 const WATER_SURFACE_DROP = 0.12;
 const AO_LEVELS = [0.45, 0.65, 0.82, 1] as const;
 
-/** Per-face basis: normal `n`, and the quad's `u` / `v` axes (see ChunkRenderer). */
-const FACE_AXES: ReadonlyArray<{
-  n: readonly [number, number, number];
-  u: readonly [number, number, number];
-  v: readonly [number, number, number];
-}> = [
-  { n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0] },
-  { n: [-1, 0, 0], u: [0, 0, 1], v: [0, 1, 0] },
-  { n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1] },
-  { n: [0, -1, 0], u: [1, 0, 0], v: [0, 0, 1] },
-  { n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] },
-  { n: [0, 0, -1], u: [-1, 0, 0], v: [0, 1, 0] },
-];
+const FACE_AXES = FACE_BASIS;
+/** Brightness of shaped blocks, which get no per-corner ambient occlusion. */
+const SHAPE_SHADE = 0.92;
 
 function padOffset(axis: readonly [number, number, number]): number {
   return axis[0] + axis[2] * PAD + axis[1] * PAD_AREA;
@@ -55,6 +48,8 @@ class GrowableFaceBuffer implements FaceBatch {
     ao1: number,
     ao2: number,
     ao3: number,
+    width = 1,
+    height = 1,
   ): void {
     let offset = this.count * FACE_STRIDE;
     if (offset + FACE_STRIDE > this.data.length) {
@@ -72,8 +67,8 @@ class GrowableFaceBuffer implements FaceBatch {
     d[offset++] = ao1;
     d[offset++] = ao2;
     d[offset++] = ao3;
-    d[offset++] = 1; // quad width in blocks (greedy meshing would emit > 1)
-    d[offset] = 1; // quad height in blocks
+    d[offset++] = width; // quad size in blocks: below 1 for shaped blocks,
+    d[offset] = height; // above 1 if a greedy mesher ever merges faces
     this.count++;
   }
 }
@@ -117,6 +112,13 @@ export class FaceMesher implements ChunkMesher {
           const center = row + x;
           const id = pad[center]!;
           if (id === 0) continue;
+          if (IS_CUBE[id] !== 1) {
+            const meta = chunk.getMeta(x + z * CHUNK_SIZE + y * 256);
+            this.emitShape(blockBoxes(id, meta), id, x, y, z, center);
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+            continue;
+          }
           const liquid = IS_LIQUID[id] === 1;
 
           for (let face = 0; face < 6; face++) {
@@ -151,6 +153,54 @@ export class FaceMesher implements ChunkMesher {
 
     if (minY > maxY) minY = maxY = 0;
     return { opaque, translucent, minY, maxY: maxY + 1 };
+  }
+
+  /**
+   * Emits the faces of a shaped block's boxes. A face lying on the cell
+   * boundary is skipped when the neighbouring block hides it.
+   */
+  private emitShape(
+    boxes: readonly Box[],
+    id: number,
+    x: number,
+    y: number,
+    z: number,
+    center: number,
+  ): void {
+    const pad = this.padded;
+    for (let b = 0; b < boxes.length; b++) {
+      const box = boxes[b]!;
+      for (let face = 0; face < 6; face++) {
+        const { u, v, n } = FACE_AXES[face]!;
+        const nAxis = n[0] !== 0 ? 0 : n[1] !== 0 ? 1 : 2;
+        const positive = n[nAxis]! > 0;
+        const plane = positive ? box[nAxis + 3]! : box[nAxis]!;
+        if (plane === (positive ? 1 : 0) && IS_OPAQUE[pad[center + N_OFFSET[face]!]!] === 1) {
+          continue;
+        }
+        const uAxis = u[0] !== 0 ? 0 : u[1] !== 0 ? 1 : 2;
+        const vAxis = v[0] !== 0 ? 0 : v[1] !== 0 ? 1 : 2;
+        // Corner of the face where the quad's texture origin goes.
+        const corner = [0, 0, 0];
+        corner[nAxis] = plane;
+        corner[uAxis] = u[uAxis]! > 0 ? box[uAxis]! : box[uAxis + 3]!;
+        corner[vAxis] = v[vAxis]! > 0 ? box[vAxis]! : box[vAxis + 3]!;
+        const origin = FACE_ORIGIN[face]!;
+        this.opaque.push(
+          x + corner[0]! - origin[0],
+          y + corner[1]! - origin[1],
+          z + corner[2]! - origin[2],
+          face,
+          FACE_TILES[id * 6 + face]!,
+          SHAPE_SHADE,
+          SHAPE_SHADE,
+          SHAPE_SHADE,
+          SHAPE_SHADE,
+          box[uAxis + 3]! - box[uAxis]!,
+          box[vAxis + 3]! - box[vAxis]!,
+        );
+      }
+    }
   }
 
   private fillPadded(chunk: Chunk, lookup: ChunkLookup, top: number): void {

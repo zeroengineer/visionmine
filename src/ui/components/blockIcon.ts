@@ -1,5 +1,5 @@
 import type { TileAtlas } from '@/rendering/textures/TileAtlas';
-import { Face, getBlockDef } from '@/world/blocks/blocks';
+import { blockBoxes, Face, getBlockDef } from '@/world/blocks/blocks';
 import type { Tile } from '@/world/blocks/tiles';
 
 const ICON_SIZE = 64;
@@ -18,23 +18,32 @@ function drawFace(
   tile: Tile,
   transform: [number, number, number, number, number, number],
   shade: number,
+  /** Part of the tile's unit square to draw: x, y, width, height. */
+  [rx, ry, rw, rh]: [number, number, number, number],
 ): void {
-  ctx.save();
-  ctx.setTransform(...transform);
-  ctx.beginPath();
-  ctx.rect(0, 0, 1, 1);
-  ctx.clip();
-  source.drawTile(ctx, tile, 0, 0, 1, 1);
+  if (rw <= 0 || rh <= 0) return;
+  // Each face is painted on its own layer so that shading it only darkens the
+  // pixels it drew (keeps glass and leaves see-through) and never the faces beneath.
+  const layer = document.createElement('canvas');
+  layer.width = ICON_SIZE;
+  layer.height = ICON_SIZE;
+  const paint = layer.getContext('2d');
+  if (!paint) return;
+  paint.imageSmoothingEnabled = false;
+  paint.setTransform(...transform);
+  paint.beginPath();
+  paint.rect(rx, ry, rw, rh);
+  paint.clip();
+  source.drawTile(paint, tile, 0, 0, 1, 1);
   if (shade > 0) {
-    // Darken only the pixels this face actually drew (keeps glass and leaves see-through).
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.fillStyle = `rgba(0, 0, 0, ${shade})`;
-    ctx.fillRect(0, 0, 1, 1);
+    paint.globalCompositeOperation = 'source-atop';
+    paint.fillStyle = `rgba(0, 0, 0, ${shade})`;
+    paint.fillRect(rx, ry, rw, rh);
   }
-  ctx.restore();
+  ctx.drawImage(layer, 0, 0);
 }
 
-/** Isometric cube icon for a block, as a cached data URL. */
+/** Isometric icon of a block's shape, as a cached data URL. */
 export function blockIconUrl(block: number): string {
   const cached = cache.get(block);
   if (cached) return cached;
@@ -47,11 +56,33 @@ export function blockIconUrl(block: number): string {
   if (!ctx) return '';
   ctx.imageSmoothingEnabled = false;
 
-  const tiles = getBlockDef(block).tiles;
-  // Unit-square → screen transforms for the three visible faces of a cube.
-  drawFace(ctx, atlas, tiles[Face.PY], [28, 14, -28, 14, 32, 3], 0);
-  drawFace(ctx, atlas, tiles[Face.PZ], [28, 14, 0, 30, 4, 17], 0.2);
-  drawFace(ctx, atlas, tiles[Face.PX], [28, -14, 0, 30, 32, 31], 0.38);
+  const def = getBlockDef(block);
+  const tiles = def.tiles;
+  // Draw the block's boxes back to front; a cube is a single full box.
+  const boxes = [...blockBoxes(block, 0)].sort((p, q) => p[3] + p[4] + p[5] - (q[3] + q[4] + q[5]));
+  for (const [x0, y0, z0, x1, y1, z1] of boxes) {
+    // Isometric projection of a point: (32 + 28(x - z), 3 + 14(x + z) + 30(1 - y)).
+    // Each visible face maps the tile's unit square onto its plane and is
+    // clipped to the part of the tile the box covers.
+    drawFace(ctx, atlas, tiles[Face.PY], [28, 14, -28, 14, 32, 3 + 30 * (1 - y1)], 0, [
+      x0,
+      z0,
+      x1 - x0,
+      z1 - z0,
+    ]);
+    drawFace(ctx, atlas, tiles[Face.PZ], [28, 14, 0, 30, 32 - 28 * z1, 3 + 14 * z1], 0.2, [
+      x0,
+      1 - y1,
+      x1 - x0,
+      y1 - y0,
+    ]);
+    drawFace(ctx, atlas, tiles[Face.PX], [28, -14, 0, 30, 4 + 28 * x1, 17 + 14 * x1], 0.38, [
+      1 - z1,
+      1 - y1,
+      z1 - z0,
+      y1 - y0,
+    ]);
+  }
 
   const url = canvas.toDataURL();
   cache.set(block, url);
