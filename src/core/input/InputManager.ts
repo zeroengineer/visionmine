@@ -57,10 +57,12 @@ export class InputManager {
     window.addEventListener('blur', this.onBlur);
     document.addEventListener('pointerlockchange', this.onLockChange);
     document.addEventListener('mousemove', this.onMouseMove);
-    canvas.addEventListener('mousedown', this.onMouseDown);
+    // Listened for on the window and filtered by target: browsers occasionally
+    // hit-test a press on the game view to the page root instead of the canvas.
+    window.addEventListener('mousedown', this.onMouseDown);
     window.addEventListener('mouseup', this.onMouseUp);
-    canvas.addEventListener('wheel', this.onWheel, { passive: false });
-    canvas.addEventListener('contextmenu', this.preventDefault);
+    window.addEventListener('wheel', this.onWheel, { passive: false });
+    window.addEventListener('contextmenu', this.onContextMenu);
   }
 
   get isLocked(): boolean {
@@ -146,10 +148,10 @@ export class InputManager {
     window.removeEventListener('blur', this.onBlur);
     document.removeEventListener('pointerlockchange', this.onLockChange);
     document.removeEventListener('mousemove', this.onMouseMove);
-    this.canvas.removeEventListener('mousedown', this.onMouseDown);
+    window.removeEventListener('mousedown', this.onMouseDown);
     window.removeEventListener('mouseup', this.onMouseUp);
-    this.canvas.removeEventListener('wheel', this.onWheel);
-    this.canvas.removeEventListener('contextmenu', this.preventDefault);
+    window.removeEventListener('wheel', this.onWheel);
+    window.removeEventListener('contextmenu', this.onContextMenu);
     this.events.clear();
   }
 
@@ -159,7 +161,19 @@ export class InputManager {
     this.events.emit('action', { action });
   }
 
-  private readonly preventDefault = (event: Event): void => event.preventDefault();
+  /**
+   * True for events aimed at the game view: the canvas itself, or the bare page
+   * behind the interface. Anything on a button, panel or field belongs to the UI.
+   */
+  private isGameTarget(target: EventTarget | null): boolean {
+    return (
+      target === this.canvas || target === document.documentElement || target === document.body
+    );
+  }
+
+  private readonly onContextMenu = (event: Event): void => {
+    if (this.isGameTarget(event.target)) event.preventDefault();
+  };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (isTextInput(event.target)) return;
@@ -208,7 +222,7 @@ export class InputManager {
   };
 
   private readonly onMouseDown = (event: MouseEvent): void => {
-    if (event.button > 2) return;
+    if (event.button > 2 || !this.isGameTarget(event.target)) return;
     const code = mouseCode(event.button);
     this.keys.add(code);
     this.events.emit('mousedown', { button: event.button });
@@ -223,6 +237,7 @@ export class InputManager {
   };
 
   private readonly onWheel = (event: WheelEvent): void => {
+    if (!this.isGameTarget(event.target)) return;
     event.preventDefault();
     // Trackpads emit many small deltas; accumulate to one step per notch.
     this.wheelAccum += event.deltaY;
