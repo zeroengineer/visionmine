@@ -89,7 +89,7 @@ Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Uni
 | `blocks.spec.ts`         | Break, place, every hotbar block, placement refused inside the player, pick block, TNT, survival consumption and timed mining                                            |
 | `inventory.spec.ts`      | Number keys and wheel, opening and closing, creative palette, moving, swapping and splitting stacks, backpack expansion, survival view                                   |
 | `pause-settings.spec.ts` | Pause freezes simulation and clock, resume, Save Now, mode switch, Save & Quit and Continue, settings applied and persisted, defaults, F3                                |
-| `persistence.spec.ts`    | Edits, player, view, flight and inventory restored after reload; save on leaving; survival state; Reset World; New Terrain                                               |
+| `persistence.spec.ts`    | Edits, player, view, flight and inventory restored after reload; save on leaving; survival state; Reset World; New Terrain; a version-1 save still loads                 |
 | `controls.spec.ts`       | Default key list, rebinding takes effect in play and survives reload, swapping on conflict, mouse ↔ key exchange, cancel, remove, reserved keys, reset                   |
 | `abilities.spec.ts`      | Sneaking on a ledge, double jump, dash, flying speed, auto-jump switched on in Settings, none of the creative abilities in survival                                      |
 | `builder.spec.ts`        | Selecting a region; fill, replace, clear, copy, rotate, paste; undo and redo by menu and by key; quick swap; hide interface; screenshot download; none of it in survival |

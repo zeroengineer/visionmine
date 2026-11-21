@@ -83,8 +83,8 @@ WorldSession                                    World.addChunk ──► event: 
                               ChunkRenderer ──► InstancedMesh (opaque) + InstancedMesh (water)
 ```
 
-- **Chunk** — a `Uint8Array` of 16 × 128 × 16 block ids (`x + z*16 + y*256`). No rendering state.
-- **World** — map of loaded chunks plus the player's edits (`chunkKey → index → blockId`). Edits live outside chunks so they survive unloading and are the only data that is saved.
+- **Chunk** — a `Uint8Array` of 16 × 128 × 16 block ids (`x + z*16 + y*256`), plus an optional parallel `meta` array holding one state byte per block (orientation, open/closed, level). `meta` is allocated the first time a chunk stores a non-zero state, so ordinary terrain costs nothing extra. No rendering state.
+- **World** — map of loaded chunks plus the player's edits (`chunkKey → index → cell`, a cell being `state << 8 | blockId`). `setBlock(x, y, z, id, meta = 0)` changes both together and `getMeta` reads the state. Edits live outside chunks so they survive unloading and are the only data that is saved.
 - **TerrainGenerator** — pure function of `(config, x, z)`. Height comes from layered simplex noise (continents, erosion, ridges, hills, detail); temperature and moisture choose the biome surface. Trees come from a jittered grid hashed from the seed and are evaluated with a two-block margin, so a canopy crossing a chunk border is produced identically by both chunks.
 - **ChunkManager** — keeps chunks loaded within `renderDistance + 2`, requests them nearest-first only when a worker is free, and unloads beyond `renderDistance + 4`.
 - **ChunkMeshScheduler** — remeshes player edits immediately; streams new chunks under a 4 ms/frame budget and only when all eight neighbours exist, so border faces and ambient occlusion are exact.
@@ -120,13 +120,13 @@ The inventory is an immutable value (`gameplay/inventory/inventory.ts`) manipula
 
 `WorldRepository` abstracts storage. `IndexedDbRepository` uses three object stores:
 
-| Store     | Key                | Contents                                                      |
-| --------- | ------------------ | ------------------------------------------------------------- |
-| `worlds`  | `id`               | name, seed and terrain config, game mode, time of day, dates  |
-| `chunks`  | `worldId:chunkKey` | that chunk's edits packed as `Uint32Array` (`index<<8 \| id`) |
-| `players` | `worldId`          | position, view angles, flight state, inventory                |
+| Store     | Key                | Contents                                                                                     |
+| --------- | ------------------ | -------------------------------------------------------------------------------------------- |
+| `worlds`  | `id`               | name, seed and terrain config, game mode, time of day, dates                                 |
+| `chunks`  | `worldId:chunkKey` | that chunk's edits packed as `Uint32Array` (`index<<16 \| state<<8 \| id`), with `format: 2` |
+| `players` | `worldId`          | position, view angles, flight state, inventory                                               |
 
-Only edits are stored; terrain is always regenerated from the seed. `SaveManager` autosaves every 10 seconds and when the tab is hidden, writes only chunks whose edits changed, runs one save at a time and re-queues edits if a write fails.
+Only edits are stored; terrain is always regenerated from the seed. Save version 2 added the state byte: chunk rows written by version 1 have no `format` field and the older `index<<8 | id` layout, and are decoded as such, then rewritten in the current layout the next time their chunk is saved. A world record from a newer save version than the running build is refused rather than guessed at. `SaveManager` autosaves every 10 seconds and when the tab is hidden, writes only chunks whose edits changed, runs one save at a time and re-queues edits if a write fails.
 
 Everything read from storage passes through validators (`codec.ts`, `sanitizeInventory`, `sanitizeSettings`). A world record that cannot be parsed appears in the world list as damaged with a delete action; unreadable edits or player data fall back to the generated world. If IndexedDB cannot be opened, `MemoryRepository` takes over and the UI states that worlds will not persist.
 
