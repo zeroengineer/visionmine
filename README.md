@@ -22,6 +22,8 @@ Requires Node.js 20.19+ (22 recommended) and a browser with WebGL 2.
 
 ## Controls
 
+These are the defaults. Every action except looking, the hotbar digits and `Esc` can be rebound in **Settings → Controls**, with up to two keys or mouse buttons each.
+
 | Action                   | Input                         |
 | ------------------------ | ----------------------------- |
 | Move                     | `W` `A` `S` `D`               |
