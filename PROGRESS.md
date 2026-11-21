@@ -1,13 +1,13 @@
 # VISIONMINE — progress snapshot
 
-Phases 1–13 (the original build and its validation) were completed on 2026-11-20. Phases 14–20 add controls, abilities, builder tools, new blocks and survival systems; the table below shows how far that has got. This file records what was built, what was verified and what is still open.
+Phases 1–13 (the original build and its validation) were completed on 2026-11-20. Phases 14–20, completed on 2026-11-21, added rebindable controls, movement abilities, builder tools, shaped blocks with light, world simulation and survival systems. This file records what was built, what was verified and what is still open.
 
 ## Where things are
 
 - Project: `/Users/devang/visionmine`
 - Repository: https://github.com/zeroengineer/visionmine
 - `main` contains every phase listed under Done, each merged from its own branch with `--no-ff`
-- All branches are pushed to GitHub
+- `main` is pushed to GitHub after every merge; a feature branch is deleted once it is merged
 
 ## Done
 
@@ -33,27 +33,32 @@ Phases 1–13 (the original build and its validation) were completed on 2026-11-
 | 17b   | `feature/new-blocks`         | `feat(blocks): shapes, slabs, stairs, doors, ladders, panes, torches, plants`   |
 | 18    | `feature/world-simulation`   | `feat(simulation): add falling sand and gravel and flowing water`               |
 | 19    | `feature/survival`           | `feat(survival): items, tools, ores, vitals, crafting`                          |
+| 20    | `test/phase-20-validation`   | final results and measurements recorded                                         |
 
 What was built, in short: Vite + TypeScript + Three.js project; chunked voxel world (16×128×16) rendered as instanced faces; seeded simplex-noise terrain with four presets, biomes, water and trees; worker-pool chunk generation with streaming and unloading; first-person controller with custom AABB collision, sprint, swim and flight; DDA raycast block breaking/placing/picking; hotbar and expandable inventory with creative and survival rules; day/night sky, sun/moon light, shadows, fog, rain/snow, debris particles, synthesised sounds; IndexedDB saves (edits, player, inventory, seed, mode, time) with create/rename/delete/reset/regenerate and corrupt-save handling; main menu, create-world, world list, loading, pause, settings and HUD; third-person camera; TNT with chain reactions. README, ARCHITECTURE and DEVELOPMENT are written.
 
 Deviations from the brief, already agreed in the plan: no Rapier (custom voxel collision), no React, TypeScript pinned to 6.0.x (typescript-eslint does not accept 7 yet), `tsc` and ESLint were run during feature phases while all tests were deferred to Phase 13.
 
-## Verified (Phase 13)
+## Verified (2026-11-21, after Phase 19)
 
 Full details, tables and measurements are in `DEVELOPMENT.md` under "Testing".
 
 - `npm run typecheck`, `npm run lint`, `npm run format:check`: clean.
 - `npm run build`: succeeds.
-- `npm test` (Vitest): 107 of 107 pass.
-- `npx playwright test`: 120 pass, 3 skipped, 0 fail — Chromium 41/41, Firefox 40/40 (performance spec skipped), WebKit 39/39 (performance spec and mouse look skipped; Playwright's WebKit does not grant pointer lock).
-- The game was opened in a real browser for the first time in this phase. Rendering, pointer lock, workers, UI and IndexedDB saves worked; screenshots of every screen, day and night, shadows, rain, water and third person were reviewed by eye.
-- Real GPU (Apple M4, High preset, 1920 × 1080): 60 fps with a 16.8 ms 99th-percentile frame, including while chunks stream in.
+- `npm test` (Vitest): 292 of 292 pass.
+- `npx playwright test`: 252 pass, 3 skipped, 0 fail — Chromium 85/85, Firefox 84/84 (performance spec skipped), WebKit 83/83 (performance spec and mouse look skipped; Playwright's WebKit does not grant pointer lock).
+- Screenshots of each new feature were reviewed by eye as it was built: the Controls tab, build menu and selection box, slabs, stairs, doors, ladders, panes, torches by day and night, meadows, flowing water and fallen sand, the survival HUD and the crafting table.
+- Real GPU (Apple M4, High preset, 1920 × 1080): 60 fps with a 16.8 ms 99th-percentile frame, including while chunks stream in — the same as the Phase 13 baseline, with about 7% more faces from plants.
 - Chunk, geometry and texture counts plateau while travelling and return to the starting footprint after leaving and re-entering a world.
 
-## Defects found and fixed in Phase 13
+## Defects found and fixed by testing
 
-- One simulated frame ran after pausing (`Game.syncFrozen`).
-- The view could jerk on the first mouse movement after capture in Firefox (`InputManager`).
+- One simulated frame ran after pausing (Phase 13).
+- The view could jerk on the first mouse movement after capture in Firefox (Phase 13).
+- A key tapped between two simulation steps was missed (Phase 15).
+- A mouse press on the game view could be lost when WebKit reported the page root as its target (Phase 16).
+- Undo steps merged when two edits fell in one slow frame (Phase 16).
+- The last step of a fall was not counted, costing one point of fall damage too few (Phase 19).
 
 ## Roadmap (Phases 14–20)
 
@@ -66,14 +71,15 @@ Full details, tables and measurements are in `DEVELOPMENT.md` under "Testing".
 | 17b   | Block shapes; slabs, stairs, doors, ladders, panes, plants, torches and block light           | done   |
 | 18    | World simulation: falling sand and gravel, flowing water                                      | done   |
 | 19    | Survival: items, health, hunger, tools, ores, crafting                                        | done   |
-| 20    | Full cross-browser validation and performance comparison                                      | next   |
+| 20    | Full cross-browser validation and performance comparison                                      | done   |
 
 From Phase 14 on, unit and browser tests are written in the same phase as the feature.
 
 ## Still open
 
 - Not tested: Safari itself, Windows and Linux browsers, mobile and touch input.
-- Known limitations are listed in `DEVELOPMENT.md` (chunk unload hysteresis, the F3 "queued" figure, slow-motion below ~12 fps).
+- Not judged by a person: how the new movement, tools and survival balance feel in play. Everything was verified by tests and screenshots, not by someone at the keyboard.
+- Known limitations are listed in `DEVELOPMENT.md`. The larger ones: no hostile creatures, no furnace, slabs do not combine, panes do not join their neighbours, torches stand on floors only, and water has no infinite-source rule.
 - Greedy meshing is designed for (see `ARCHITECTURE.md`) but not implemented.
 
 ## Useful commands

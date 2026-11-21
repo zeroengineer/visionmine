@@ -49,7 +49,7 @@ The browser tests run against the production build served by `vite preview` on p
 - `main` always holds completed features.
 - One branch per feature (`feature/<name>`), branched from an up-to-date `main`.
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org/).
-- Feature branches are merged into `main` with `--no-ff`. No force-pushing.
+- Feature branches are merged into `main` with `--no-ff`, `main` is pushed, and the merged branch is deleted. No force-pushing.
 - `node_modules`, `dist`, test output and environment files are ignored.
 
 ## Debugging aids
@@ -78,7 +78,7 @@ The browser tests run against the production build served by `vite preview` on p
 
 ## Testing
 
-Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Unit tests, browser tests and gameplay QA were written and executed in the final validation phase.
+Phases 1–12 ran static checks only (`npm run typecheck`, `npm run lint`); their unit tests, browser tests and gameplay QA were written and executed in Phase 13. From Phase 14 on, each feature is merged together with its unit and browser tests, after the full suite passes on Chromium, Firefox and WebKit.
 
 ### What is covered
 
@@ -104,19 +104,21 @@ Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Uni
 
 Tests use real pointer lock where the browser grants it to automation (Chromium, Firefox) and the debug hook's `virtualLock()` otherwise (WebKit).
 
-### Results (2026-11-20, macOS, Apple M4)
+### Results (2026-11-21, macOS, Apple M4, after Phase 19)
 
-| Check                                   | Result                                                     |
-| --------------------------------------- | ---------------------------------------------------------- |
-| `npm run typecheck`, `npm run lint`     | clean                                                      |
-| `npm run format:check`                  | clean                                                      |
-| `npm test`                              | 107 / 107 passed                                           |
-| `npm run build`                         | succeeds — 655 kB JS (173 kB gzip), 14 kB CSS, 8 kB worker |
-| Playwright, Chromium 1255 (SwiftShader) | 41 / 41 passed                                             |
-| Playwright, Firefox 1572                | 40 / 40 passed, 1 skipped (performance spec)               |
-| Playwright, WebKit 2388                 | 39 / 39 passed, 2 skipped (performance spec, mouse look)   |
+| Check                                   | Result                                                   |
+| --------------------------------------- | -------------------------------------------------------- |
+| `npm run typecheck`, `npm run lint`     | clean                                                    |
+| `npm run format:check`                  | clean                                                    |
+| `npm test`                              | 292 / 292 passed (18 files)                              |
+| `npm run build`                         | succeeds — 712 kB JS (193 kB gzip)                       |
+| Playwright, Chromium 1255 (SwiftShader) | 85 / 85 passed                                           |
+| Playwright, Firefox 1572                | 84 / 84 passed, 1 skipped (performance spec)             |
+| Playwright, WebKit 2388                 | 83 / 83 passed, 2 skipped (performance spec, mouse look) |
 
 The WebKit mouse-look test is skipped because Playwright's WebKit does not grant pointer lock; the same code path passes in Chromium and Firefox.
+
+For comparison, the first validation on 2026-11-20 (Phase 13) had 107 unit tests, 41 browser tests and a 655 kB bundle (173 kB gzip).
 
 ### Defects found by browser testing and fixed
 
@@ -162,6 +164,12 @@ Re-measured on 2026-11-21 with the same real-GPU set-up as above (Apple M4, High
 | Settled after the flight, 304 meshed | 60 fps  | 16.8 ms               | 174        | 109 k     | 131,884 → 141,016      |
 
 Still at the display's refresh cap in all three. `performance.spec.ts` continues to pass with the same chunk window and the same return to the starting footprint.
+
+### After Phase 19 (survival)
+
+Re-measured on 2026-11-21 with the same real-GPU set-up. The numbers are unchanged from Phase 17 — 60 fps average and a 16.8 ms 99th-percentile frame standing, sprint-flying through streaming chunks and settled afterwards — because items, vitals and crafting add no per-frame rendering work, and ore changes which texture a face shows, not how many faces there are. Loading a new world to the first playable frame took 0.3–0.6 s.
+
+`performance.spec.ts` at render distance 3: 81 chunks loaded and 37 meshed at spawn, a plateau of 99 and 57 while travelling 576 blocks, and exactly the starting footprint (27,398 faces, 21–22 GPU geometries, 1 texture) both on returning and after leaving and re-entering the world.
 
 ### Known limitations
 
