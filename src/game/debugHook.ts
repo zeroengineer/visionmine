@@ -26,6 +26,8 @@ export interface DebugApi {
     ready: boolean;
   } | null;
   getBlock(x: number, y: number, z: number): number;
+  /** State byte of a block (orientation, open/closed…). */
+  getMeta(x: number, y: number, z: number): number;
   target(): {
     x: number;
     y: number;
@@ -84,6 +86,8 @@ export function installDebugHook(game: Game): void {
     },
     getBlock: (x, y, z) =>
       playing()?.world.getBlock(Math.floor(x), Math.floor(y), Math.floor(z)) ?? 0,
+    getMeta: (x, y, z) =>
+      playing()?.world.getMeta(Math.floor(x), Math.floor(y), Math.floor(z)) ?? 0,
     target() {
       const session = playing();
       if (!session) return null;

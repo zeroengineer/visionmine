@@ -1,4 +1,10 @@
-import { decodeEdits, encodeEdits, parsePlayerRecord, parseWorldRecord } from './codec';
+import {
+  decodeEdits,
+  EDIT_FORMAT,
+  encodeEdits,
+  parsePlayerRecord,
+  parseWorldRecord,
+} from './codec';
 import type {
   ChunkEditsEntry,
   PlayerRecord,
@@ -21,6 +27,8 @@ interface ChunkRow {
   worldId: string;
   chunkKey: number;
   data: Uint32Array;
+  /** Layout of `data`; rows written before block state existed have none (format 1). */
+  format?: number;
 }
 
 function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
@@ -154,7 +162,8 @@ export class IndexedDbRepository implements WorldRepository {
     for (const row of rows) {
       const chunkKey = (row as Partial<ChunkRow> | null)?.chunkKey;
       if (typeof chunkKey !== 'number' || !Number.isInteger(chunkKey)) continue;
-      const edits = decodeEdits((row as Partial<ChunkRow>).data);
+      const { data, format } = row as Partial<ChunkRow>;
+      const edits = decodeEdits(data, format === EDIT_FORMAT ? EDIT_FORMAT : 1);
       if (edits.size > 0) result.set(chunkKey, edits);
     }
     return result;
@@ -170,6 +179,7 @@ export class IndexedDbRepository implements WorldRepository {
         worldId,
         chunkKey: entry.chunkKey,
         data: encodeEdits(entry.edits),
+        format: EDIT_FORMAT,
       };
       store.put(row);
     }

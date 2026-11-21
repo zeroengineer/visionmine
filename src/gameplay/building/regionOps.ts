@@ -24,6 +24,8 @@ export interface Clipboard {
   sy: number;
   sz: number;
   blocks: Uint8Array;
+  /** State byte of each copied block, in the same order. */
+  meta: Uint8Array;
 }
 
 /** Largest region a single operation may touch (32 × 32 × 32). */
@@ -105,28 +107,34 @@ export function clearRegion(world: World, region: Region): number {
 export function copyRegion(world: World, region: Region): Clipboard {
   const { sx, sy, sz } = regionSize(region);
   const blocks = new Uint8Array(sx * sy * sz);
+  const meta = new Uint8Array(blocks.length);
   let i = 0;
   forEachCell(region, (x, y, z) => {
-    blocks[i++] = world.getBlock(x, y, z);
+    blocks[i] = world.getBlock(x, y, z);
+    meta[i++] = world.getMeta(x, y, z);
   });
-  return { sx, sy, sz, blocks };
+  return { sx, sy, sz, blocks, meta };
 }
 
 /** Returns the clipboard turned a quarter turn clockwise, seen from above. */
 export function rotateClipboard(clipboard: Clipboard): Clipboard {
-  const { sx, sy, sz, blocks } = clipboard;
+  const { sx, sy, sz, blocks, meta } = clipboard;
   const rotated = new Uint8Array(blocks.length);
+  const rotatedMeta = new Uint8Array(meta.length);
   // After the turn the footprint is sz wide and sx deep.
   for (let y = 0; y < sy; y++) {
     for (let z = 0; z < sz; z++) {
       for (let x = 0; x < sx; x++) {
         const nx = sz - 1 - z;
         const nz = x;
-        rotated[nx + nz * sz + y * sz * sx] = blocks[x + z * sx + y * sx * sz]!;
+        const from = x + z * sx + y * sx * sz;
+        const to = nx + nz * sz + y * sz * sx;
+        rotated[to] = blocks[from]!;
+        rotatedMeta[to] = meta[from]!;
       }
     }
   }
-  return { sx: sz, sy, sz: sx, blocks: rotated };
+  return { sx: sz, sy, sz: sx, blocks: rotated, meta: rotatedMeta };
 }
 
 /** Region a clipboard would occupy with its lowest corner at `origin`. */
@@ -148,18 +156,19 @@ export function pasteClipboard(
   origin: Cell,
   skip?: CellFilter,
 ): number {
-  const { sx, sy, sz, blocks } = clipboard;
+  const { sx, sy, sz, blocks, meta } = clipboard;
   let changed = 0;
   for (let y = 0; y < sy; y++) {
     for (let z = 0; z < sz; z++) {
       for (let x = 0; x < sx; x++) {
-        const block = blocks[x + z * sx + y * sx * sz]!;
+        const index = x + z * sx + y * sx * sz;
+        const block = blocks[index]!;
         if (block === BlockId.Air) continue;
         const wx = origin.x + x;
         const wy = origin.y + y;
         const wz = origin.z + z;
         if (skip?.(wx, wy, wz) || isProtected(world.getBlock(wx, wy, wz))) continue;
-        if (world.setBlock(wx, wy, wz, block)) changed++;
+        if (world.setBlock(wx, wy, wz, block, meta[index])) changed++;
       }
     }
   }

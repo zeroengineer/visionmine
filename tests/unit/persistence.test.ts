@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { WorldService } from '@/game/WorldService';
 import { BlockId } from '@/world/blocks/blocks';
 import { chunkKey } from '@/world/chunks/coords';
+import { cellBlock, cellMeta, packCell } from '@/world/World';
 import {
   decodeEdits,
+  EDIT_FORMAT,
   encodeEdits,
   normalizeWorldName,
   parsePlayerRecord,
@@ -13,7 +15,7 @@ import {
 import { IndexedDbRepository } from '@/world/persistence/IndexedDbRepository';
 import { MemoryRepository } from '@/world/persistence/MemoryRepository';
 import { openRepository } from '@/world/persistence/openRepository';
-import type { PlayerRecord, WorldRepository } from '@/world/persistence/types';
+import { SAVE_VERSION, type PlayerRecord, type WorldRepository } from '@/world/persistence/types';
 
 let dbCounter = 0;
 const freshDbName = (): string => `visionmine-test-${++dbCounter}`;
@@ -39,11 +41,39 @@ describe('save codecs', () => {
     expect(decodeEdits(encodeEdits(edits))).toEqual(edits);
   });
 
+  it('round-trips block state alongside the block id', () => {
+    const edits = new Map([
+      [0, packCell(BlockId.Planks, 3)],
+      [32767, packCell(BlockId.Glass, 255)],
+      [77, packCell(BlockId.Stone, 0)],
+    ]);
+    const decoded = decodeEdits(encodeEdits(edits));
+    expect(decoded).toEqual(edits);
+    expect(cellBlock(decoded.get(32767)!)).toBe(BlockId.Glass);
+    expect(cellMeta(decoded.get(32767)!)).toBe(255);
+    // Without state, a cell is simply the block id.
+    expect(decoded.get(77)).toBe(BlockId.Stone);
+  });
+
   it('drops invalid edit entries instead of failing', () => {
-    const data = [(5 << 8) | BlockId.Dirt, (40000 << 8) | 1, (6 << 8) | 200, -4, 1.5, 'x'];
+    const data = [(5 << 16) | BlockId.Dirt, (40000 << 16) | 1, (6 << 16) | 200, -4, 1.5, 'x'];
     expect(decodeEdits(data)).toEqual(new Map([[5, BlockId.Dirt]]));
     expect(decodeEdits('garbage')).toEqual(new Map());
     expect(decodeEdits(undefined)).toEqual(new Map());
+  });
+
+  it('reads edits written in the first save format', () => {
+    // Format 1 packed `index << 8 | id` and had no state byte.
+    const legacy = new Uint32Array([(5 << 8) | BlockId.Dirt, (32767 << 8) | BlockId.Brick]);
+    expect(decodeEdits(legacy, 1)).toEqual(
+      new Map([
+        [5, BlockId.Dirt],
+        [32767, BlockId.Brick],
+      ]),
+    );
+    expect(decodeEdits([(40000 << 8) | 1, (6 << 8) | 200], 1)).toEqual(new Map());
+    expect(EDIT_FORMAT).toBe(2);
+    expect(SAVE_VERSION).toBe(2);
   });
 
   it('rejects unusable world records and repairs partial ones', () => {
@@ -280,6 +310,58 @@ describe('IndexedDbRepository resilience', () => {
 
     await repo.deleteWorld('broken');
     expect(await repo.listWorlds()).toHaveLength(1);
+    repo.close();
+  });
+
+  it('stores block state and still reads rows saved before it existed', async () => {
+    const name = freshDbName();
+    const repo = await IndexedDbRepository.open(indexedDB, name);
+    await repo.saveEdits('w', [
+      { chunkKey: 1, edits: new Map([[4, packCell(BlockId.Planks, 2)]]) },
+    ]);
+    // A row exactly as the first release wrote it: no `format`, 8-bit layout.
+    await rawPut(name, 'chunks', {
+      key: 'w:2',
+      worldId: 'w',
+      chunkKey: 2,
+      data: new Uint32Array([(9 << 8) | BlockId.Brick, (300 << 8) | BlockId.Glass]),
+    });
+
+    const edits = await repo.loadEdits('w');
+    expect(edits.get(1)).toEqual(new Map([[4, packCell(BlockId.Planks, 2)]]));
+    expect(edits.get(2)).toEqual(
+      new Map([
+        [9, BlockId.Brick],
+        [300, BlockId.Glass],
+      ]),
+    );
+
+    // Saving that chunk again rewrites it in the current format.
+    await repo.saveEdits('w', [{ chunkKey: 2, edits: edits.get(2)! }]);
+    expect((await repo.loadEdits('w')).get(2)).toEqual(edits.get(2));
+    repo.close();
+  });
+
+  it('opens a world record from the previous save version', async () => {
+    const name = freshDbName();
+    const repo = await IndexedDbRepository.open(indexedDB, name);
+    await rawPut(name, 'worlds', {
+      id: 'old',
+      name: 'Old World',
+      config: { seed: 'abc', terrain: 'standard', treeDensity: 1 },
+      mode: 'creative',
+      createdAt: 1,
+      lastPlayedAt: 2,
+      timeOfDay: 0.4,
+      version: 1,
+    });
+    await rawPut(name, 'worlds', { id: 'future', config: { seed: 'x' }, version: 99 });
+
+    const old = await repo.getWorld('old');
+    expect(old?.name).toBe('Old World');
+    expect(old?.version).toBe(SAVE_VERSION);
+    // A save from a newer release than this one is not guessed at.
+    expect(await repo.getWorld('future')).toBeNull();
     repo.close();
   });
 
