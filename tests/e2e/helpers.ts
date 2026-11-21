@@ -30,6 +30,19 @@ export const Block = {
   FlowerRed: 29,
   FlowerYellow: 30,
   TallGrass: 31,
+  CoalOre: 32,
+  IronOre: 33,
+  CraftingTable: 34,
+} as const;
+
+/** Ids of items that are not blocks (mirrors `ItemId` in src/gameplay/items/items.ts). */
+export const Item = {
+  Stick: 256,
+  Coal: 257,
+  Iron: 258,
+  Apple: 259,
+  WoodPickaxe: 260,
+  StonePickaxe: 263,
 } as const;
 
 export const SETTINGS_KEY = 'visionmine.settings.v1';
@@ -166,6 +179,16 @@ export const game = {
       ([bx, by, bz, id, m]) => window.__visionmine.setBlock(bx!, by!, bz!, id!, m),
       [x, y, z, block, meta],
     ),
+  vitals: async (page: Page) => {
+    const vitals = await page.evaluate(() => window.__visionmine.vitals());
+    if (!vitals) throw new Error('No world is being played.');
+    return vitals;
+  },
+  setVitals: (page: Page, health: number, hunger: number) =>
+    page.evaluate(([h, f]) => window.__visionmine.setVitals(h!, f!), [health, hunger]),
+  /** Adds items to the inventory. */
+  give: (page: Page, item: number, count = 1) =>
+    page.evaluate(([id, n]) => window.__visionmine.give(id!, n), [item, count]),
   /** Puts a block in the player's hand. */
   hold: (page: Page, block: number) => page.evaluate((id) => window.__visionmine.hold(id), block),
 };
