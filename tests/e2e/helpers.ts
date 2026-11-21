@@ -205,11 +205,21 @@ export async function pauseGame(page: Page): Promise<void> {
 export async function resumeGame(page: Page): Promise<void> {
   await page.click(tid('pause-resume'));
   await waitForScreen(page, 'playing');
+  await ensureCaptured(page);
+}
+
+/**
+ * For use after the game itself asked for the mouse (closing a menu): waits for
+ * real pointer lock and falls back to the virtual lock, without clicking the
+ * world — a click would be a gameplay action.
+ */
+export async function ensureCaptured(page: Page): Promise<void> {
   const locked = await page
     .waitForFunction(() => document.pointerLockElement !== null, null, { timeout: 1500 })
     .then(() => true)
     .catch(() => false);
   if (!locked) await page.evaluate(() => window.__visionmine.virtualLock(true));
+  await expect(page.locator(tid('click-to-play'))).toBeHidden();
 }
 
 /** Leaves the current world through the pause menu. */

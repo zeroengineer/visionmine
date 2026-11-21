@@ -53,7 +53,7 @@ test.describe('controls in settings', () => {
     await expect(cap(dialog, 'placeBlock')).toHaveText('Right click');
     await expect(cap(dialog, 'inventory')).toHaveText('E');
     await expect(cap(dialog, 'debugOverlay')).toHaveText('F3');
-    await expect(dialog.locator('[data-binding-row]')).toHaveCount(15);
+    await expect(dialog.locator('[data-binding-row]')).toHaveCount(22);
 
     // Controls that cannot be changed are shown but are not buttons.
     const fixed = dialog.locator('.bindings__row--fixed');
@@ -132,8 +132,8 @@ test.describe('controls in settings', () => {
 
     // Put "break block" on a key: the capture consumes the key press.
     await cap(dialog, 'breakBlock').click();
-    await page.keyboard.press('KeyB');
-    await expect(cap(dialog, 'breakBlock')).toHaveText('B');
+    await page.keyboard.press('KeyG');
+    await expect(cap(dialog, 'breakBlock')).toHaveText('G');
 
     // Put "jump" on the left mouse button, pressed over an unrelated button:
     // the press becomes the binding and must not activate what is under it.
@@ -142,7 +142,7 @@ test.describe('controls in settings', () => {
     await page.mouse.down();
     await page.mouse.up();
     await expect(cap(dialog, 'jump')).toHaveText('Left click');
-    await expect(cap(dialog, 'breakBlock')).toHaveText('B');
+    await expect(cap(dialog, 'breakBlock')).toHaveText('G');
     expect(await game.screen(page)).toBe('settings');
 
     await closeSettings(page);
@@ -150,7 +150,7 @@ test.describe('controls in settings', () => {
     await captureMouse(page);
 
     const target = await aimAtGround(page);
-    await page.keyboard.press('KeyB');
+    await page.keyboard.press('KeyG');
     await expect.poll(() => game.getBlock(page, target.x, target.y, target.z)).toBe(Block.Air);
 
     // The click that captured the mouse may itself have counted as a jump, so let

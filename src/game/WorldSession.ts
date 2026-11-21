@@ -4,7 +4,12 @@ import type { CameraRig } from '@/core/camera/CameraRig';
 import type { InputManager } from '@/core/input/InputManager';
 import { QUALITY_PROFILES } from '@/core/renderer/quality';
 import type { Renderer } from '@/core/renderer/Renderer';
-import { BlockInteraction, type InteractionRules } from '@/gameplay/interaction/BlockInteraction';
+import { BuildTools, type BuildAction, type BuildResult } from '@/gameplay/building/BuildTools';
+import {
+  BlockInteraction,
+  blockIntersectsPlayer,
+  type InteractionRules,
+} from '@/gameplay/interaction/BlockInteraction';
 import { TntManager } from '@/gameplay/interaction/TntManager';
 import { createRaycastHit, raycastVoxels } from '@/gameplay/interaction/voxelRaycast';
 import { sanitizeInventory, selectedStack, starterInventory } from '@/gameplay/inventory/inventory';
@@ -18,12 +23,15 @@ import { ChunkRenderer } from '@/rendering/chunks/ChunkRenderer';
 import type { ChunkMaterials } from '@/rendering/chunks/chunkMaterial';
 import type { Environment } from '@/rendering/environment/Environment';
 import { BlockHighlight } from '@/rendering/highlight/BlockHighlight';
+import { SelectionBox } from '@/rendering/highlight/SelectionBox';
 import { DebrisParticles } from '@/rendering/particles/DebrisParticles';
 import { PrimedTntRenderer } from '@/rendering/particles/PrimedTntRenderer';
 import type { TileAtlas } from '@/rendering/textures/TileAtlas';
+import { buildStore } from '@/state/buildStore';
 import { inventoryStore } from '@/state/inventoryStore';
 import { sessionStore } from '@/state/sessionStore';
 import { settingsStore } from '@/state/settingsStore';
+import { uiStore } from '@/state/uiStore';
 import { damp, lerp } from '@/utils/math';
 import { BlockId, getBlockDef, IS_SOLID } from '@/world/blocks/blocks';
 import { ChunkManager } from '@/world/chunks/ChunkManager';
@@ -77,6 +85,7 @@ export class WorldSession {
   readonly interaction: BlockInteraction;
   readonly particles: DebrisParticles;
   readonly tnt: TntManager;
+  readonly build: BuildTools;
   readonly attract: boolean;
   /** Freezes player simulation and interaction (pause menu). */
   paused = false;
@@ -84,6 +93,9 @@ export class WorldSession {
 
   private readonly pool: ChunkGeneratorPool;
   private readonly highlight: BlockHighlight;
+  private readonly selectionBox: SelectionBox;
+  /** Hotbar slot that was selected before the current one, for quick swap. */
+  private previousSlot = 0;
   private readonly primedTnt: PrimedTntRenderer;
   private readonly avatar: PlayerAvatar;
   private readonly cameraHit = createRaycastHit();
@@ -140,6 +152,9 @@ export class WorldSession {
     this.controller.sprintToggle = settings.sprintToggle;
 
     this.highlight = new BlockHighlight(scene);
+    this.selectionBox = new SelectionBox(scene);
+    this.build = new BuildTools(this.world);
+    this.build.enabled = false;
     this.particles = new DebrisParticles(
       scene,
       640 * QUALITY_PROFILES[settings.quality].particleScale,
@@ -180,17 +195,33 @@ export class WorldSession {
       this.interaction.events.on('broken', ({ x, y, z, block }) => {
         this.particles.burst(x + 0.5, y + 0.5, z + 0.5, getBlockDef(block).color, 14);
         engine.sfx.play('break');
+        // Each break, placement or blast is its own undo step, however many
+        // of them happen within one frame.
+        this.build.history.commit();
       }),
-      this.interaction.events.on('placed', () => engine.sfx.play('place')),
+      this.interaction.events.on('placed', () => {
+        engine.sfx.play('place');
+        this.build.history.commit();
+      }),
       this.tnt.events.on('primed', () => engine.sfx.play('fuse')),
-      this.tnt.events.on('exploded', (event) =>
-        this.onExplosion(event.x, event.y, event.z, event.radius, event.result.removed),
-      ),
+      this.tnt.events.on('exploded', (event) => {
+        this.build.history.commit();
+        this.onExplosion(event.x, event.y, event.z, event.radius, event.result.removed);
+      }),
       input.events.on('action', ({ action }) => {
         if (!input.isLocked || this.paused) return;
         if (action === 'toggleFly') this.controller.toggleFlying();
         else if (action === 'thirdPerson') this.toggleThirdPerson();
+        else if (action === 'swapSlot') inventoryStore.getState().select(this.previousSlot);
+        else if (action === 'selectCorner')
+          this.report(this.build.markCorner(this.interaction.target));
+        else if (action === 'undo') this.report(this.build.undo());
+        else if (action === 'redo') this.report(this.build.redo());
       }),
+      inventoryStore.subscribe(
+        (s) => s.selected,
+        (_selected, previous) => (this.previousSlot = previous),
+      ),
       input.events.on('keydown', ({ code }) => {
         if (!input.isLocked || this.paused) return;
         const digit = /^Digit([1-9])$/.exec(code);
@@ -286,6 +317,10 @@ export class WorldSession {
     if (this.playerReady && !this.paused) this.interaction.update(dt);
     this.highlight.update(this.interaction.target, this.interaction.breakProgress);
     this.particles.update(dt, this.world);
+    // Anything else that changed the world this frame closes as one undo step.
+    this.build.history.commit();
+    this.selectionBox.update(this.build.selection, this.build.corners.a);
+    this.publishBuildState();
     this.primedTnt.update(this.tnt.active, elapsed);
     this.shake = Math.max(0, this.shake - dt * 1.6);
 
@@ -377,6 +412,8 @@ export class WorldSession {
     this.interaction.dispose();
     this.tnt.dispose();
     this.highlight.dispose();
+    this.selectionBox.dispose();
+    this.build.dispose();
     this.particles.dispose();
     this.primedTnt.dispose();
     this.avatar.dispose();
@@ -384,7 +421,17 @@ export class WorldSession {
     this.meshScheduler.dispose();
     this.chunkRenderer.dispose();
     this.world.events.clear();
-    if (!this.attract) sessionStore.getState().setUnderwater(false);
+    if (!this.attract) {
+      sessionStore.getState().setUnderwater(false);
+      buildStore.getState().update({
+        available: false,
+        corners: 0,
+        selection: null,
+        clipboard: null,
+        canUndo: false,
+        canRedo: false,
+      });
+    }
   }
 
   private createInteractionRules(): InteractionRules {
@@ -411,6 +458,70 @@ export class WorldSession {
     };
   }
 
+  /** Runs a builder tool with the player's current hand and target. */
+  runBuildAction(action: BuildAction): BuildResult {
+    this.interaction.retarget();
+    const hit = this.interaction.target;
+    const feet = this.player.position;
+    const result = this.build.run(action, {
+      heldBlock: selectedStack(inventoryStore.getState())?.block ?? 0,
+      pasteOrigin: hit ? { x: hit.x + hit.nx, y: hit.y + hit.ny, z: hit.z + hit.nz } : null,
+      // Never bury the player inside what they build.
+      skip: (x, y, z) => blockIntersectsPlayer(x, y, z, feet),
+    });
+    this.publishBuildState();
+    return result;
+  }
+
+  private report(result: BuildResult): void {
+    uiStore.getState().flash(result.message);
+    this.publishBuildState();
+  }
+
+  /** Mirrors builder state into the store, writing only when something changed. */
+  private publishBuildState(): void {
+    const { build } = this;
+    const state = buildStore.getState();
+    const region = build.selection;
+    const corners = region ? 2 : build.corners.a ? 1 : 0;
+    const sx = region ? region.maxX - region.minX + 1 : 0;
+    const sy = region ? region.maxY - region.minY + 1 : 0;
+    const sz = region ? region.maxZ - region.minZ + 1 : 0;
+    const clip = build.clipboard;
+    const sameSelection =
+      (state.selection === null && !region) ||
+      (state.selection !== null &&
+        !!region &&
+        state.selection.sx === sx &&
+        state.selection.sy === sy &&
+        state.selection.sz === sz);
+    const sameClipboard =
+      (state.clipboard === null && !clip) ||
+      (state.clipboard !== null &&
+        !!clip &&
+        state.clipboard.sx === clip.sx &&
+        state.clipboard.sy === clip.sy &&
+        state.clipboard.sz === clip.sz);
+    if (
+      state.available === build.enabled &&
+      state.corners === corners &&
+      sameSelection &&
+      sameClipboard &&
+      state.canUndo === build.history.canUndo &&
+      state.canRedo === build.history.canRedo
+    ) {
+      return;
+    }
+    state.update({
+      available: build.enabled,
+      corners,
+      selection: region ? { sx, sy, sz } : null,
+      clipboard: clip ? { sx: clip.sx, sy: clip.sy, sz: clip.sz } : null,
+      canUndo: build.history.canUndo,
+      canRedo: build.history.canRedo,
+    });
+  }
+
   /** Steps the flying speed up (+1) or down (-1) and reports it to the HUD. */
   private changeFlySpeed(direction: number): void {
     const { min, max, step } = FLY_SPEED_SCALE;
@@ -424,6 +535,7 @@ export class WorldSession {
     this.controller.allowFlying = rules.canFly;
     this.controller.maxAirJumps = rules.airJumps;
     this.controller.allowDash = rules.canDash;
+    this.build.enabled = rules.buildTools;
     if (!rules.canFly) this.controller.setFlying(false);
     this.interaction.reach = rules.reach;
   }

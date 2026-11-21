@@ -8,7 +8,8 @@ import { AdaptiveResolution } from '@/core/renderer/AdaptiveResolution';
 import { QUALITY_PROFILES } from '@/core/renderer/quality';
 import { Renderer } from '@/core/renderer/Renderer';
 import { createScene } from '@/core/scene/createScene';
-import type { GameMode } from '@/gameplay/modes/gameMode';
+import type { BuildAction, BuildResult } from '@/gameplay/building/BuildTools';
+import { GAME_MODES, type GameMode } from '@/gameplay/modes/gameMode';
 import { createChunkMaterials, type ChunkMaterials } from '@/rendering/chunks/chunkMaterial';
 import { Environment } from '@/rendering/environment/Environment';
 import { TileAtlas } from '@/rendering/textures/TileAtlas';
@@ -74,8 +75,10 @@ export class Game implements GameCommands {
   private readonly adaptive: AdaptiveResolution;
   private frameMs = 16.7;
   private pausedAt = 0;
+  /** A screenshot was requested and is taken right after the next render. */
+  private screenshotPending = false;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(private readonly canvas: HTMLCanvasElement) {
     const settings = settingsStore.getState();
     const profile = QUALITY_PROFILES[settings.quality];
 
@@ -140,6 +143,7 @@ export class Game implements GameCommands {
       render: (alpha) => {
         this.session?.prepareRender(alpha);
         this.renderer.render(this.scene, this.cameraRig.camera);
+        if (this.screenshotPending) this.captureScreenshot();
       },
     });
   }
@@ -230,6 +234,18 @@ export class Game implements GameCommands {
   closeInventory(): void {
     if (uiStore.getState().screen !== 'inventory') return;
     inventoryStore.getState().dropCursor();
+    uiStore.getState().setScreen('playing');
+    this.input.requestLock();
+  }
+
+  buildAction(action: BuildAction): BuildResult {
+    const session = this.session;
+    if (!session || session.attract) return { ok: false, message: 'No world is open.' };
+    return session.runBuildAction(action);
+  }
+
+  closeBuildMenu(): void {
+    if (uiStore.getState().screen !== 'build') return;
     uiStore.getState().setScreen('playing');
     this.input.requestLock();
   }
@@ -434,6 +450,7 @@ export class Game implements GameCommands {
     if (code !== 'Escape') return;
     const ui = uiStore.getState();
     if (ui.screen === 'inventory') this.closeInventory();
+    else if (ui.screen === 'build') this.closeBuildMenu();
     else if (ui.screen === 'playing') this.pause();
     else if (ui.screen === 'paused') {
       if (performance.now() - this.pausedAt > PAUSE_DEBOUNCE_MS) this.resume();
@@ -446,9 +463,47 @@ export class Game implements GameCommands {
     if (action === 'inventory') {
       if (ui.screen === 'playing' && this.input.isLocked) this.openInventory();
       else if (ui.screen === 'inventory') this.closeInventory();
+    } else if (action === 'buildMenu') {
+      if (ui.screen === 'build') this.closeBuildMenu();
+      else if (ui.screen === 'playing' && this.input.isLocked) this.openBuildMenu();
     } else if (action === 'debugOverlay') {
       settingsStore.getState().set({ showDebug: !settingsStore.getState().showDebug });
+    } else if (action === 'hideHud') {
+      if (ui.screen === 'playing') ui.toggleHud();
+    } else if (action === 'screenshot') {
+      if (this.session && !this.session.attract) this.screenshotPending = true;
     }
+  }
+
+  private openBuildMenu(): void {
+    if (!GAME_MODES[sessionStore.getState().mode].buildTools) {
+      uiStore.getState().flash('Build tools are available in Creative mode.');
+      return;
+    }
+    uiStore.getState().setScreen('build');
+    this.releaseMouse();
+  }
+
+  /**
+   * Saves the frame that was just drawn as a PNG. Must run in the same task as
+   * the render, before the browser clears the WebGL drawing buffer.
+   */
+  private captureScreenshot(): void {
+    this.screenshotPending = false;
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    this.canvas.toBlob((blob) => {
+      if (!blob) {
+        uiStore.getState().notify('The screenshot could not be saved.', 'error');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `visionmine-${stamp}.png`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      uiStore.getState().flash('Screenshot saved');
+    }, 'image/png');
   }
 
   private applySettings(): void {
