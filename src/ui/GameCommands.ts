@@ -1,3 +1,4 @@
+import type { BuildAction, BuildResult } from '@/gameplay/building/BuildTools';
 import type { GameMode } from '@/gameplay/modes/gameMode';
 import type { TerrainType } from '@/world/generation/config';
 import type { WorldSummary } from '@/world/persistence/types';
@@ -46,6 +47,9 @@ export interface GameCommands {
   deleteWorld(id: string): Promise<void>;
   resume(): void;
   closeInventory(): void;
+  /** Runs a builder tool on the active world and reports what happened. */
+  buildAction(action: BuildAction): BuildResult;
+  closeBuildMenu(): void;
   saveNow(): Promise<void>;
   /** Discards all edits of the current world and respawns the player. */
   resetWorld(): Promise<void>;

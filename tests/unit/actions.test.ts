@@ -42,7 +42,7 @@ describe('default bindings', () => {
     expect(actionForCode(bindings, 'KeyW')).toBe('moveForward');
     expect(actionForCode(bindings, 'ArrowUp')).toBe('moveForward');
     expect(actionForCode(bindings, 'Mouse2')).toBe('placeBlock');
-    expect(actionForCode(bindings, 'KeyQ')).toBeNull();
+    expect(actionForCode(bindings, 'KeyP')).toBeNull();
     const lookup = buildCodeLookup(bindings);
     expect(lookup.get('F3')).toBe('debugOverlay');
     expect(lookup.size).toBe(ACTIONS.reduce((n, a) => n + bindings[a.id].length, 0));

@@ -43,8 +43,9 @@ export function createHud(commands: GameCommands): View {
   );
 
   const refresh = (): void => {
-    const { screen, pointerLocked } = uiStore.getState();
-    el.hidden = !isInGame(screen);
+    const { screen, pointerLocked, hudHidden } = uiStore.getState();
+    // A hidden HUD comes back for menus that are drawn over it.
+    el.hidden = !isInGame(screen) || (hudHidden && screen === 'playing' && pointerLocked);
     const waiting = screen === 'playing' && !pointerLocked;
     hint.hidden = !waiting;
     crosshair.style.visibility = screen === 'playing' && pointerLocked ? 'visible' : 'hidden';
@@ -57,6 +58,11 @@ export function createHud(commands: GameCommands): View {
       (s) => s.mode,
       (mode) => (modeBadge.textContent = GAME_MODES[mode].label),
       { fireImmediately: true },
+    ),
+    uiStore.subscribe((s) => s.hudHidden, refresh),
+    uiStore.subscribe(
+      (s) => s.notice,
+      (message) => showNotice(message.text),
     ),
     sessionStore.subscribe(
       (s) => s.flySpeed,

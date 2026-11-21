@@ -11,6 +11,8 @@ export interface GameModeRules {
   /** Extra jumps allowed before landing. */
   airJumps: number;
   canDash: boolean;
+  /** Selection tools, copy/paste and undo. */
+  buildTools: boolean;
 }
 
 export const GAME_MODES: Record<GameMode, GameModeRules> = {
@@ -22,6 +24,7 @@ export const GAME_MODES: Record<GameMode, GameModeRules> = {
     reach: 8,
     airJumps: 1,
     canDash: true,
+    buildTools: true,
   },
   survival: {
     label: 'Survival',
@@ -31,6 +34,7 @@ export const GAME_MODES: Record<GameMode, GameModeRules> = {
     reach: 5.5,
     airJumps: 0,
     canDash: false,
+    buildTools: false,
   },
 };
 

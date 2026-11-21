@@ -31,9 +31,16 @@ const ACTION_SPECS = {
   breakBlock: { label: 'Break block', category: 'building', defaults: ['Mouse0'] },
   placeBlock: { label: 'Place · light TNT', category: 'building', defaults: ['Mouse2'] },
   pickBlock: { label: 'Pick targeted block', category: 'building', defaults: ['Mouse1'] },
+  swapSlot: { label: 'Previous hotbar slot', category: 'building', defaults: ['KeyQ'] },
+  selectCorner: { label: 'Mark selection corner', category: 'building', defaults: ['KeyX'] },
+  buildMenu: { label: 'Build tools', category: 'building', defaults: ['KeyB'] },
+  undo: { label: 'Undo', category: 'building', defaults: ['KeyZ'] },
+  redo: { label: 'Redo', category: 'building', defaults: ['KeyY'] },
   inventory: { label: 'Inventory', category: 'interface', defaults: ['KeyE'] },
   thirdPerson: { label: 'Third-person camera', category: 'interface', defaults: ['KeyV'] },
   debugOverlay: { label: 'Debug overlay', category: 'interface', defaults: ['F3'] },
+  hideHud: { label: 'Hide interface', category: 'interface', defaults: ['F1'] },
+  screenshot: { label: 'Screenshot', category: 'interface', defaults: ['F2'] },
 } as const satisfies Record<string, ActionSpec>;
 
 export type ActionId = keyof typeof ACTION_SPECS;

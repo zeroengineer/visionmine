@@ -5,6 +5,7 @@ import type { GameCommands } from './GameCommands';
 import { createHud } from './hud/Hud';
 import { createToasts } from './hud/Toasts';
 import { createInventoryScreen } from './inventory/InventoryScreen';
+import { createBuildMenu } from './menus/BuildMenu';
 import { createPauseMenu } from './menus/PauseMenu';
 import { createSettingsScreen } from './menus/SettingsScreen';
 import { createCreateWorldScreen } from './screens/CreateWorldScreen';
@@ -25,6 +26,7 @@ export function mountUi(root: HTMLElement, commands: GameCommands, atlas: TileAt
     createWorldsScreen(commands),
     createLoadingScreen(),
     createInventoryScreen({ onClose: () => commands.closeInventory() }),
+    createBuildMenu(commands),
     createPauseMenu(commands),
     createSettingsScreen(),
     createToasts(),
