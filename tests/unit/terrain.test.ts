@@ -236,6 +236,27 @@ describe('generator versions', () => {
     expect(plants).toBeGreaterThan(50);
   });
 
+  it('follows the vegetation setting', () => {
+    const count = (treeDensity: number): number => {
+      const generator = new TerrainGenerator({
+        seed: 'versions',
+        terrain: 'flatlands',
+        treeDensity,
+        generator: 2,
+      });
+      let n = 0;
+      for (let cx = -2; cx <= 2; cx++) {
+        for (const id of generator.generateChunk(cx, 0)) if (PLANTS.has(id)) n++;
+      }
+      return n;
+    };
+    expect(count(0)).toBe(0);
+    const sparse = count(0.5);
+    const normal = count(1);
+    expect(sparse).toBeGreaterThan(0);
+    expect(sparse).toBeLessThan(normal);
+  });
+
   it('is deterministic for a given version', () => {
     const a = chunkPair(3, -4).v2;
     const b = chunkPair(3, -4).v2;

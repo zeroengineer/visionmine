@@ -44,7 +44,7 @@ export function createCreateWorldScreen(commands: GameCommands): View {
     true,
   );
   const density = segmented<Density>(
-    'Trees',
+    'Vegetation',
     [
       { value: 'none', label: 'None' },
       { value: 'sparse', label: 'Sparse' },

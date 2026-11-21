@@ -4,7 +4,7 @@ export interface WorldConfig {
   /** Any text; hashed to the numeric generator seed. */
   seed: string;
   terrain: TerrainType;
-  /** Multiplier for tree frequency: 0 = none, 1 = normal, 2 = dense. */
+  /** Multiplier for trees and plants: 0 = none, 1 = normal, 2 = dense trees. */
   treeDensity: number;
   /**
    * Generator version the world was created with. A world keeps its version for

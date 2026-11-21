@@ -233,9 +233,12 @@ export class TerrainGenerator {
     if (column.surface !== BlockId.Grass || column.height <= SEA_LEVEL) return 0;
     if (column.height + 1 >= CHUNK_HEIGHT) return 0;
     const roll = hash3(this.seed, x, z, 91);
+    // Plants follow the vegetation setting: none at 0, full density from 1 up.
+    const density = Math.min(1, this.treeDensity);
+    if (density <= 0) return 0;
     const meadow = column.biome === 'plains';
-    const grass = meadow ? 0.1 : 0.04;
-    const flower = meadow ? 0.02 : 0.008;
+    const grass = (meadow ? 0.1 : 0.04) * density;
+    const flower = (meadow ? 0.02 : 0.008) * density;
     if (roll < grass) return BlockId.TallGrass;
     if (roll < grass + flower) return BlockId.FlowerRed;
     if (roll < grass + flower * 2) return BlockId.FlowerYellow;
