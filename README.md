@@ -30,7 +30,10 @@ These are the defaults. Every action except looking, the hotbar digits and `Esc`
 | Look                     | Mouse                         |
 | Jump / swim up / fly up  | `Space`                       |
 | Sprint                   | `Shift`                       |
-| Fly down                 | `C` or `Ctrl`                 |
+| Sneak / fly down         | `C` or `Ctrl`                 |
+| Dash (creative)          | `R`                           |
+| Double jump (creative)   | `Space` again in mid-air      |
+| Flying speed             | `Shift` + mouse wheel         |
 | Toggle flying (creative) | `F` or double-tap `Space`     |
 | Break block              | Left click (hold in survival) |
 | Place block / light TNT  | Right click                   |
@@ -53,6 +56,7 @@ These are the defaults. Every action except looking, the hotbar digits and `Esc`
 **Play**
 
 - First-person controller with gravity, jumping, sprinting, swimming and voxel-accurate collision
+- Sneaking that will not walk off ledges, optional auto-jump and toggle-sprint, and in Creative mode a double jump, a dash and adjustable flying speed
 - Break, place and pick blocks with a highlighted target block
 - Creative mode (unlimited blocks, instant breaking, flight) and Survival mode (mine to collect, timed breaking)
 - Hotbar and expandable inventory with stack splitting and a creative block palette

@@ -9,8 +9,9 @@ import { TntManager } from '@/gameplay/interaction/TntManager';
 import { createRaycastHit, raycastVoxels } from '@/gameplay/interaction/voxelRaycast';
 import { sanitizeInventory, selectedStack, starterInventory } from '@/gameplay/inventory/inventory';
 import { GAME_MODES } from '@/gameplay/modes/gameMode';
-import { PlayerController } from '@/gameplay/movement/PlayerController';
+import { FLY_SPEED_SCALE, PlayerController } from '@/gameplay/movement/PlayerController';
 import { Player, PLAYER_EYE_HEIGHT, PLAYER_HEIGHT } from '@/gameplay/player/Player';
+import { clamp } from '@/utils/math';
 import { PlayerAvatar } from '@/rendering/avatar/PlayerAvatar';
 import { ChunkMeshScheduler } from '@/rendering/chunks/ChunkMeshScheduler';
 import { ChunkRenderer } from '@/rendering/chunks/ChunkRenderer';
@@ -93,6 +94,8 @@ export class WorldSession {
   private playerReady = false;
   private readonly restoredPlayer: boolean;
   private fovKick = 0;
+  /** Smoothed eye height, so sneaking lowers the view instead of snapping it. */
+  private eyeHeight = PLAYER_EYE_HEIGHT;
   private shake = 0;
   private attractHeight = SEA_LEVEL + 40;
   private elapsed = 0;
@@ -133,6 +136,8 @@ export class WorldSession {
     this.controller = new PlayerController(this.player, this.world, input);
     this.controller.sensitivity = settings.sensitivity;
     this.controller.invertY = settings.invertY;
+    this.controller.autoJump = settings.autoJump;
+    this.controller.sprintToggle = settings.sprintToggle;
 
     this.highlight = new BlockHighlight(scene);
     this.particles = new DebrisParticles(
@@ -168,6 +173,7 @@ export class WorldSession {
           : starterInventory(sessionStore.getState().mode),
       );
     this.applyGameMode();
+    sessionStore.getState().setFlySpeed(1);
     if (saved?.flying) this.controller.setFlying(true);
 
     this.unsubscribers.push(
@@ -191,7 +197,10 @@ export class WorldSession {
         if (digit) inventoryStore.getState().select(Number(digit[1]) - 1);
       }),
       input.events.on('wheel', ({ direction }) => {
-        if (input.isLocked && !this.paused) inventoryStore.getState().cycle(direction);
+        if (!input.isLocked || this.paused) return;
+        // While flying, the wheel with the sprint key held changes flying speed instead.
+        if (this.player.flying && input.isActionDown('sprint')) this.changeFlySpeed(-direction);
+        else inventoryStore.getState().cycle(direction);
       }),
       sessionStore.subscribe(
         (s) => s.mode,
@@ -204,6 +213,14 @@ export class WorldSession {
       settingsStore.subscribe(
         (s) => s.invertY,
         (value) => (this.controller.invertY = value),
+      ),
+      settingsStore.subscribe(
+        (s) => s.autoJump,
+        (value) => (this.controller.autoJump = value),
+      ),
+      settingsStore.subscribe(
+        (s) => s.sprintToggle,
+        (value) => (this.controller.sprintToggle = value),
       ),
     );
   }
@@ -276,6 +293,8 @@ export class WorldSession {
       sessionStore.getState().setUnderwater(player.headInWater);
     }
 
+    this.eyeHeight = lerp(this.eyeHeight, player.eyeHeight, damp(16, dt));
+
     const kickTarget = player.sprinting ? (player.flying ? 10 : 7) : 0;
     this.fovKick = lerp(this.fovKick, kickTarget, damp(8, dt));
     this.engine.cameraRig.setFovOffset(this.fovKick);
@@ -300,7 +319,7 @@ export class WorldSession {
     const { position, previous, yaw, pitch } = this.player;
     const rig = this.engine.cameraRig;
     const x = lerp(previous.x, position.x, alpha);
-    const y = lerp(previous.y, position.y, alpha) + PLAYER_EYE_HEIGHT;
+    const y = lerp(previous.y, position.y, alpha) + this.eyeHeight + this.player.viewOffsetY;
     const z = lerp(previous.z, position.z, alpha);
 
     if (this.thirdPerson) {
@@ -392,9 +411,19 @@ export class WorldSession {
     };
   }
 
+  /** Steps the flying speed up (+1) or down (-1) and reports it to the HUD. */
+  private changeFlySpeed(direction: number): void {
+    const { min, max, step } = FLY_SPEED_SCALE;
+    const next = clamp(this.controller.flySpeedScale + direction * step, min, max);
+    this.controller.flySpeedScale = next;
+    sessionStore.getState().setFlySpeed(next);
+  }
+
   private applyGameMode(): void {
     const rules = GAME_MODES[sessionStore.getState().mode];
     this.controller.allowFlying = rules.canFly;
+    this.controller.maxAirJumps = rules.airJumps;
+    this.controller.allowDash = rules.canDash;
     if (!rules.canFly) this.controller.setFlying(false);
     this.interaction.reach = rules.reach;
   }

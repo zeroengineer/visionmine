@@ -91,6 +91,7 @@ Feature phases ran static checks only (`npm run typecheck`, `npm run lint`). Uni
 | `pause-settings.spec.ts` | Pause freezes simulation and clock, resume, Save Now, mode switch, Save & Quit and Continue, settings applied and persisted, defaults, F3              |
 | `persistence.spec.ts`    | Edits, player, view, flight and inventory restored after reload; save on leaving; survival state; Reset World; New Terrain                             |
 | `controls.spec.ts`       | Default key list, rebinding takes effect in play and survives reload, swapping on conflict, mouse ↔ key exchange, cancel, remove, reserved keys, reset |
+| `abilities.spec.ts`      | Sneaking on a ledge, double jump, dash, flying speed, auto-jump switched on in Settings, none of the creative abilities in survival                    |
 | `worlds.spec.ts`         | Empty list, ordering, play, rename (and cancel), delete with confirmation, damaged save listed and deletable                                           |
 | `performance.spec.ts`    | Chunk, geometry and texture counts while travelling 576 blocks, on returning, and after leaving and re-entering the world (Chromium only)              |
 

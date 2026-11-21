@@ -39,6 +39,8 @@ export class InputManager {
   readonly events = new Emitter<InputEvents>();
   /** Codes currently held: keyboard codes and `Mouse0`–`Mouse2`. */
   private readonly keys = new Set<string>();
+  /** Actions pressed since the simulation last asked, so quick taps are never missed. */
+  private readonly pressed = new Set<ActionId>();
   private bindings: Bindings = defaultBindings();
   private codeToAction = buildCodeLookup(this.bindings);
   private lookX = 0;
@@ -84,6 +86,15 @@ export class InputManager {
     return false;
   }
 
+  /**
+   * True once for each press of the action since the previous call. Unlike
+   * `isActionDown`, this still reports a tap that began and ended between two
+   * simulation steps.
+   */
+  consumePress(action: ActionId): boolean {
+    return this.pressed.delete(action);
+  }
+
   /** Returns the mouse movement accumulated since the last call and resets it. */
   consumeLook(out: { x: number; y: number }): void {
     out.x = this.lookX;
@@ -124,6 +135,7 @@ export class InputManager {
   /** Drops all held keys and buttons (used when gameplay input is suspended). */
   releaseAll(): void {
     this.keys.clear();
+    this.pressed.clear();
     this.lookX = 0;
     this.lookY = 0;
   }
@@ -141,6 +153,12 @@ export class InputManager {
     this.events.clear();
   }
 
+  private press(action: ActionId): void {
+    // Only gameplay consumes presses, and only while input is captured.
+    if (this.locked) this.pressed.add(action);
+    this.events.emit('action', { action });
+  }
+
   private readonly preventDefault = (event: Event): void => event.preventDefault();
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -154,7 +172,7 @@ export class InputManager {
     if (event.repeat) return;
     this.keys.add(event.code);
     this.events.emit('keydown', { code: event.code });
-    if (action !== undefined) this.events.emit('action', { action });
+    if (action !== undefined) this.press(action);
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
@@ -195,7 +213,7 @@ export class InputManager {
     this.keys.add(code);
     this.events.emit('mousedown', { button: event.button });
     const action = this.codeToAction.get(code);
-    if (action !== undefined) this.events.emit('action', { action });
+    if (action !== undefined) this.press(action);
   };
 
   private readonly onMouseUp = (event: MouseEvent): void => {

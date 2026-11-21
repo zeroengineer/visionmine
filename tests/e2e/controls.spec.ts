@@ -53,7 +53,7 @@ test.describe('controls in settings', () => {
     await expect(cap(dialog, 'placeBlock')).toHaveText('Right click');
     await expect(cap(dialog, 'inventory')).toHaveText('E');
     await expect(cap(dialog, 'debugOverlay')).toHaveText('F3');
-    await expect(dialog.locator('[data-binding-row]')).toHaveCount(14);
+    await expect(dialog.locator('[data-binding-row]')).toHaveCount(15);
 
     // Controls that cannot be changed are shown but are not buttons.
     const fixed = dialog.locator('.bindings__row--fixed');
@@ -153,10 +153,15 @@ test.describe('controls in settings', () => {
     await page.keyboard.press('KeyB');
     await expect.poll(() => game.getBlock(page, target.x, target.y, target.z)).toBe(Block.Air);
 
+    // The click that captured the mouse may itself have counted as a jump, so let
+    // that settle: two presses close together would toggle flying instead.
+    await page.waitForTimeout(600);
+    await expect.poll(async () => (await game.player(page)).onGround).toBe(true);
     const start = await game.player(page);
     await page.mouse.down();
     await expect.poll(async () => (await game.player(page)).y).toBeGreaterThan(start.y + 0.5);
     await page.mouse.up();
+    expect((await game.player(page)).flying).toBe(false);
     // The left button no longer breaks blocks.
     await expect.poll(async () => (await game.player(page)).onGround).toBe(true);
     const next = await aimAtGround(page);

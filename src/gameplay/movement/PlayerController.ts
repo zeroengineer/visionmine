@@ -3,8 +3,8 @@ import { clamp } from '@/utils/math';
 import { BlockId, IS_SOLID } from '@/world/blocks/blocks';
 import { CHUNK_HEIGHT } from '@/world/constants';
 import type { World } from '@/world/World';
-import { bodyCollides, moveAndCollide, type MoveResult } from '../collision/aabb';
-import { PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, type Player } from '../player/Player';
+import { bodyCollides, boxCollides, moveWithStepUp, type MoveResult } from '../collision/aabb';
+import { PLAYER_HALF_WIDTH, PLAYER_HEIGHT, type Player } from '../player/Player';
 
 /** Tunable movement parameters (blocks and seconds). */
 export interface MovementConfig {
@@ -13,7 +13,14 @@ export interface MovementConfig {
   flySpeed: number;
   flySprintSpeed: number;
   swimSpeed: number;
+  sneakSpeed: number;
   jumpVelocity: number;
+  /** Upward speed of a jump made in mid-air. */
+  airJumpVelocity: number;
+  dashSpeed: number;
+  /** Seconds a dash holds its speed, and seconds before the next one. */
+  dashDuration: number;
+  dashCooldown: number;
   gravity: number;
   terminalVelocity: number;
   groundAcceleration: number;
@@ -29,7 +36,12 @@ export const DEFAULT_MOVEMENT: MovementConfig = {
   flySpeed: 11,
   flySprintSpeed: 24,
   swimSpeed: 2.6,
+  sneakSpeed: 1.4,
   jumpVelocity: 8.7,
+  airJumpVelocity: 8.2,
+  dashSpeed: 16,
+  dashDuration: 0.18,
+  dashCooldown: 1,
   gravity: 30,
   terminalVelocity: 56,
   groundAcceleration: 14,
@@ -41,6 +53,13 @@ export const DEFAULT_MOVEMENT: MovementConfig = {
 const MAX_PITCH = Math.PI / 2 - 0.01;
 const COYOTE_TIME = 0.1;
 const DOUBLE_TAP_WINDOW = 0.28;
+/** Ledges up to this height are climbed without jumping. */
+const STEP_HEIGHT = 0.6;
+/** With auto-jump on, a full block is climbed the same way. */
+const AUTO_JUMP_HEIGHT = 1.05;
+/** A sneaking player refuses to step where the ground is further down than this. */
+const SNEAK_DROP = 0.6;
+export const FLY_SPEED_SCALE = { min: 0.25, max: 3, step: 0.25 } as const;
 
 /**
  * Translates input into player motion and integrates physics against the voxel
@@ -53,10 +72,27 @@ export class PlayerController {
   allowFlying = true;
   sensitivity = 1;
   invertY = false;
+  /** Jumps available in mid-air before landing (game-mode rule). */
+  maxAirJumps = 0;
+  allowDash = false;
+  /** Climb full blocks without jumping (setting). */
+  autoJump = false;
+  /** The sprint key switches sprinting on and off instead of being held (setting). */
+  sprintToggle = false;
+  /** Multiplier on flying speed, adjusted by the player. */
+  flySpeedScale = 1;
   private readonly result: MoveResult = { onGround: false, hitCeiling: false, hitWall: false };
   private readonly lookDelta = { x: 0, y: 0 };
   private timeSinceGround = 0;
   private jumpHeld = false;
+  private airJumpsUsed = 0;
+  private sprintHeld = false;
+  private sprintLatched = false;
+  private dashHeld = false;
+  private dashTime = 0;
+  private dashCooldown = 0;
+  private dashX = 0;
+  private dashZ = 0;
   private lastJumpTap = -Infinity;
   private clock = 0;
 
@@ -148,20 +184,30 @@ export class PlayerController {
     const strafe = active
       ? Number(input.isActionDown('moveRight')) - Number(input.isActionDown('moveLeft'))
       : 0;
-    const jump = active && input.isActionDown('jump');
+    // A press is taken from the input queue as well as from the held state, so a
+    // tap shorter than one simulation step still counts.
+    const jumpTapped = input.consumePress('jump') && active;
+    const dashTapped = input.consumePress('dash') && active;
+    const jump = active && (input.isActionDown('jump') || jumpTapped);
     const descend = active && input.isActionDown('descend');
     const sprintKey = active && input.isActionDown('sprint');
+    const dashKey = active && input.isActionDown('dash');
+    const jumpPressed = jumpTapped || (jump && !this.jumpHeld);
+    const dashPressed = dashTapped || (dashKey && !this.dashHeld);
+    this.dashHeld = dashKey;
 
     // Double-tap jump toggles flying.
-    if (jump && !this.jumpHeld) {
+    let toggledFlight = false;
+    if (jumpPressed) {
       if (this.clock - this.lastJumpTap < DOUBLE_TAP_WINDOW && this.allowFlying) {
         this.toggleFlying();
         this.lastJumpTap = -Infinity;
+        toggledFlight = true;
       } else {
         this.lastJumpTap = this.clock;
       }
     }
-    this.jumpHeld = jump;
+    this.jumpHeld = active && input.isActionDown('jump');
     if (player.flying && !this.allowFlying) player.flying = false;
 
     this.updateWaterState();
@@ -176,10 +222,41 @@ export class PlayerController {
       wishX /= length;
       wishZ /= length;
     }
-    player.sprinting = sprintKey && forward > 0 && length > 0;
+    player.sneaking = descend && !player.flying && !player.inWater;
+
+    // Sprint is either held, or switched on by a press and kept until the player stops.
+    if (this.sprintToggle) {
+      if (sprintKey && !this.sprintHeld) this.sprintLatched = !this.sprintLatched;
+      if (forward <= 0) this.sprintLatched = false;
+    } else {
+      this.sprintLatched = false;
+    }
+    this.sprintHeld = sprintKey;
+    const wantsSprint = this.sprintToggle ? this.sprintLatched : sprintKey;
+    player.sprinting = wantsSprint && forward > 0 && length > 0 && !player.sneaking;
+
+    this.dashCooldown = Math.max(0, this.dashCooldown - dt);
+    this.dashTime = Math.max(0, this.dashTime - dt);
+    if (player.flying || player.inWater) this.dashTime = 0;
+    if (
+      dashPressed &&
+      this.allowDash &&
+      this.dashCooldown === 0 &&
+      !player.flying &&
+      !player.inWater
+    ) {
+      // Dash where the player is steering, or straight ahead when standing still.
+      this.dashX = length > 0 ? wishX : -sin;
+      this.dashZ = length > 0 ? wishZ : -cos;
+      this.dashTime = cfg.dashDuration;
+      this.dashCooldown = cfg.dashCooldown;
+      if (velocity.y < 0) velocity.y = 0;
+    }
+    player.viewOffsetY *= 1 - Math.min(1, 14 * dt);
+    if (Math.abs(player.viewOffsetY) < 1e-3) player.viewOffsetY = 0;
 
     if (player.flying) {
-      const speed = player.sprinting ? cfg.flySprintSpeed : cfg.flySpeed;
+      const speed = (player.sprinting ? cfg.flySprintSpeed : cfg.flySpeed) * this.flySpeedScale;
       const blend = Math.min(1, cfg.flyAcceleration * dt);
       const vertical = (Number(jump) - Number(descend)) * speed * 0.75;
       velocity.x += (wishX * speed - velocity.x) * blend;
@@ -194,7 +271,11 @@ export class PlayerController {
       const targetY = jump ? 3.4 : -2.2;
       velocity.y += (targetY - velocity.y) * Math.min(1, 5 * dt);
     } else {
-      const speed = player.sprinting ? cfg.sprintSpeed : cfg.walkSpeed;
+      const speed = player.sneaking
+        ? cfg.sneakSpeed
+        : player.sprinting
+          ? cfg.sprintSpeed
+          : cfg.walkSpeed;
       const accel = player.onGround ? cfg.groundAcceleration : cfg.airAcceleration;
       const blend = Math.min(1, accel * dt);
       // In the air, only steer when there is input so momentum is preserved.
@@ -204,14 +285,31 @@ export class PlayerController {
       }
       velocity.y = Math.max(velocity.y - cfg.gravity * dt, -cfg.terminalVelocity);
 
+      if (this.dashTime > 0) {
+        velocity.x = this.dashX * cfg.dashSpeed;
+        velocity.z = this.dashZ * cfg.dashSpeed;
+      }
+
       this.timeSinceGround = player.onGround ? 0 : this.timeSinceGround + dt;
       if (jump && this.timeSinceGround <= COYOTE_TIME && velocity.y <= 0.01) {
         velocity.y = cfg.jumpVelocity;
         this.timeSinceGround = Infinity;
+      } else if (
+        jumpPressed &&
+        !toggledFlight &&
+        !player.onGround &&
+        this.timeSinceGround > COYOTE_TIME &&
+        this.airJumpsUsed < this.maxAirJumps
+      ) {
+        velocity.y = cfg.airJumpVelocity;
+        this.airJumpsUsed++;
       }
     }
+    if (player.onGround || player.flying || player.inWater) this.airJumpsUsed = 0;
 
-    moveAndCollide(
+    const walking = player.onGround && !player.flying && !player.inWater && velocity.y <= 0;
+    if (walking && player.sneaking) this.guardEdges(dt);
+    const rise = moveWithStepUp(
       this.world,
       position,
       velocity,
@@ -219,13 +317,44 @@ export class PlayerController {
       PLAYER_HALF_WIDTH,
       PLAYER_HEIGHT,
       this.result,
+      walking ? (this.autoJump ? AUTO_JUMP_HEIGHT : STEP_HEIGHT) : 0,
     );
+    // The body moves up at once; the camera catches up smoothly.
+    if (rise > 0) player.viewOffsetY -= rise;
     player.onGround = this.result.onGround;
 
     // Falling out of the world: put the player back on top of it.
     if (position.y < -16) {
       this.placeOnGround();
     }
+  }
+
+  /** Cancels horizontal movement that would carry a sneaking player off a ledge. */
+  private guardEdges(dt: number): void {
+    const { position, velocity } = this.player;
+    if (velocity.x !== 0 && !this.hasGroundAt(position.x + velocity.x * dt, position.z)) {
+      velocity.x = 0;
+    }
+    if (
+      velocity.z !== 0 &&
+      !this.hasGroundAt(position.x + velocity.x * dt, position.z + velocity.z * dt)
+    ) {
+      velocity.z = 0;
+    }
+  }
+
+  /** True when some part of the body's footprint would rest on a block near the current height. */
+  private hasGroundAt(x: number, z: number): boolean {
+    const y = this.player.position.y;
+    return boxCollides(
+      this.world,
+      x - PLAYER_HALF_WIDTH,
+      y - SNEAK_DROP,
+      z - PLAYER_HALF_WIDTH,
+      x + PLAYER_HALF_WIDTH,
+      y,
+      z + PLAYER_HALF_WIDTH,
+    );
   }
 
   private updateWaterState(): void {
@@ -235,6 +364,6 @@ export class PlayerController {
     const world = this.world;
     this.player.inWater = world.getBlock(x, Math.floor(position.y + 0.4), z) === BlockId.Water;
     this.player.headInWater =
-      world.getBlock(x, Math.floor(position.y + PLAYER_EYE_HEIGHT), z) === BlockId.Water;
+      world.getBlock(x, Math.floor(position.y + this.player.eyeHeight), z) === BlockId.Water;
   }
 }

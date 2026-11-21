@@ -133,3 +133,70 @@ export function moveAndCollide(
   }
   return result;
 }
+
+const stepProbe: Vec3Like = { x: 0, y: 0, z: 0 };
+const stepVelocity: Vec3Like = { x: 0, y: 0, z: 0 };
+const stepResult: MoveResult = { onGround: false, hitCeiling: false, hitWall: false };
+
+/**
+ * `moveAndCollide` for a body standing on the ground that can climb ledges up
+ * to `stepHeight` without jumping. When the plain move is stopped by a wall, the
+ * move is retried from `stepHeight` higher and then lowered again; it is kept
+ * only if the body ends up standing higher and further along than before.
+ *
+ * Returns the height climbed (0 when no step was taken).
+ */
+export function moveWithStepUp(
+  blocks: BlockQuery,
+  position: Vec3Like,
+  velocity: Vec3Like,
+  dt: number,
+  halfWidth: number,
+  height: number,
+  result: MoveResult,
+  stepHeight: number,
+): number {
+  const startX = position.x;
+  const startY = position.y;
+  const startZ = position.z;
+  const vx = velocity.x;
+  const vz = velocity.z;
+
+  moveAndCollide(blocks, position, velocity, dt, halfWidth, height, result);
+  if (!result.hitWall || stepHeight <= 0 || (vx === 0 && vz === 0)) return 0;
+
+  // Retry from the raised position, if there is headroom for it.
+  stepProbe.x = startX;
+  stepProbe.y = startY + stepHeight;
+  stepProbe.z = startZ;
+  if (bodyCollides(blocks, stepProbe, halfWidth, height)) return 0;
+  stepVelocity.x = vx;
+  stepVelocity.y = 0;
+  stepVelocity.z = vz;
+  moveAndCollide(blocks, stepProbe, stepVelocity, dt, halfWidth, height, stepResult);
+  const hitWall = stepResult.hitWall;
+  const keptX = stepVelocity.x;
+  const keptZ = stepVelocity.z;
+
+  // Settle back down onto whatever is underneath.
+  stepVelocity.x = 0;
+  stepVelocity.z = 0;
+  stepVelocity.y = -stepHeight / dt;
+  moveAndCollide(blocks, stepProbe, stepVelocity, dt, halfWidth, height, stepResult);
+
+  const rise = stepProbe.y - startY;
+  const plain = (position.x - startX) ** 2 + (position.z - startZ) ** 2;
+  const stepped = (stepProbe.x - startX) ** 2 + (stepProbe.z - startZ) ** 2;
+  if (!stepResult.onGround || rise <= EPSILON || stepped <= plain + 1e-9) return 0;
+
+  position.x = stepProbe.x;
+  position.y = stepProbe.y;
+  position.z = stepProbe.z;
+  velocity.x = keptX;
+  velocity.y = 0;
+  velocity.z = keptZ;
+  result.onGround = true;
+  result.hitCeiling = false;
+  result.hitWall = hitWall;
+  return rise;
+}

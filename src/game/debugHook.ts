@@ -21,6 +21,8 @@ export interface DebugApi {
     pitch: number;
     onGround: boolean;
     flying: boolean;
+    sneaking: boolean;
+    sprinting: boolean;
     ready: boolean;
   } | null;
   getBlock(x: number, y: number, z: number): number;
@@ -66,7 +68,7 @@ export function installDebugHook(game: Game): void {
     player() {
       const session = playing();
       if (!session) return null;
-      const { position, yaw, pitch, onGround, flying } = session.player;
+      const { position, yaw, pitch, onGround, flying, sneaking, sprinting } = session.player;
       return {
         x: position.x,
         y: position.y,
@@ -75,6 +77,8 @@ export function installDebugHook(game: Game): void {
         pitch,
         onGround,
         flying,
+        sneaking,
+        sprinting,
         ready: session.isPlayerReady,
       };
     },

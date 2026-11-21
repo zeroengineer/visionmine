@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { actionForCode, defaultBindings, type ActionId } from '@/core/input/actions';
-import type { InputManager, InputEvents } from '@/core/input/InputManager';
 import {
   BlockInteraction,
   blockIntersectsPlayer,
@@ -11,34 +9,10 @@ import { explode } from '@/gameplay/interaction/explosion';
 import { TntManager } from '@/gameplay/interaction/TntManager';
 import { PlayerController } from '@/gameplay/movement/PlayerController';
 import { Player } from '@/gameplay/player/Player';
-import { Emitter } from '@/utils/Emitter';
 import { mulberry32 } from '@/utils/rng';
 import { BlockId } from '@/world/blocks/blocks';
+import { FakeInput } from './fakeInput';
 import { flatWorld } from './helpers';
-
-/** Stands in for InputManager with the default bindings. */
-class FakeInput {
-  readonly events = new Emitter<InputEvents>();
-  isLocked = true;
-  /** Held codes: keyboard codes and `Mouse0`–`Mouse2`. */
-  readonly keys = new Set<string>();
-  private readonly bindings = defaultBindings();
-  isDown = (code: string): boolean => this.keys.has(code);
-  isActionDown = (action: ActionId): boolean =>
-    this.bindings[action].some((code) => this.keys.has(code));
-  /** A momentary press: fires the bound action without holding the code. */
-  press(code: string): void {
-    const action = actionForCode(this.bindings, code);
-    if (action) this.events.emit('action', { action });
-  }
-  consumeLook(out: { x: number; y: number }): void {
-    out.x = 0;
-    out.y = 0;
-  }
-  asManager(): InputManager {
-    return this as unknown as InputManager;
-  }
-}
 
 function setup(instant = true, selected: number = BlockId.Planks) {
   const world = flatWorld(10);
