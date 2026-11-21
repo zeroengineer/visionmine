@@ -28,6 +28,9 @@ export interface PlayerRecord {
   pitch: number;
   flying: boolean;
   inventory: unknown;
+  /** Survival health and hunger; absent in saves from before they existed. */
+  health?: number;
+  hunger?: number;
 }
 
 /** Entry in the world list. Corrupt saves are listed so they can be deleted. */

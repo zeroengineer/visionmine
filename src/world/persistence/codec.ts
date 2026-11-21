@@ -86,6 +86,9 @@ export function parsePlayerRecord(raw: unknown, worldId: string): PlayerRecord |
     pitch: finite(r.pitch) ? Math.min(1.56, Math.max(-1.56, r.pitch)) : 0,
     flying: r.flying === true,
     inventory: r.inventory ?? null,
+    // Range-checked where they are applied (Vitals.restore).
+    ...(finite(r.health) ? { health: r.health } : {}),
+    ...(finite(r.hunger) ? { hunger: r.hunger } : {}),
   };
 }
 

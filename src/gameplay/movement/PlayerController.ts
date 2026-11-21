@@ -95,6 +95,10 @@ export class PlayerController {
   private dashCooldown = 0;
   private dashX = 0;
   private dashZ = 0;
+  /** Blocks fallen since the player last stood, swam, climbed or flew. */
+  private fallDistance = 0;
+  /** Length of the fall that just ended, until someone asks for it. */
+  private landing = 0;
   private lastJumpTap = -Infinity;
   private clock = 0;
 
@@ -119,6 +123,16 @@ export class PlayerController {
       -MAX_PITCH,
       MAX_PITCH,
     );
+  }
+
+  /**
+   * Distance of the fall that ended since the last call, or 0. A fall counts
+   * from the highest point, so jumping off a ledge adds the jump's height.
+   */
+  consumeLanding(): number {
+    const distance = this.landing;
+    this.landing = 0;
+    return distance;
   }
 
   toggleFlying(): void {
@@ -149,6 +163,7 @@ export class PlayerController {
       }
     }
     this.player.teleport(position.x, CHUNK_HEIGHT, position.z);
+    this.fallDistance = 0;
     return true;
   }
 
@@ -332,6 +347,15 @@ export class PlayerController {
       this.result,
       walking ? (this.autoJump ? AUTO_JUMP_HEIGHT : STEP_HEIGHT) : 0,
     );
+    // Track how far the player has dropped, to judge the landing.
+    if (player.flying || player.inWater || player.climbing) {
+      this.fallDistance = 0;
+    } else if (this.result.onGround) {
+      if (this.fallDistance > 0) this.landing = this.fallDistance;
+      this.fallDistance = 0;
+    } else if (position.y < previous.y) {
+      this.fallDistance += previous.y - position.y;
+    }
     // The body moves up at once; the camera catches up smoothly.
     if (rise > 0) player.viewOffsetY -= rise;
     player.onGround = this.result.onGround;

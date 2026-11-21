@@ -140,6 +140,82 @@
   opacity: 1;
 }
 
+/* ---- Vitals --------------------------------------------------------------- */
+.vitals {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+}
+
+.vitals__row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.vital {
+  display: flex;
+  gap: 2px;
+}
+
+.vital--air {
+  justify-content: flex-end;
+}
+
+.vital[hidden] {
+  display: none;
+}
+
+.vital__pip {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: rgba(8, 11, 16, 0.75);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.vital__pip--health {
+  --pip: #e5484d;
+  border-radius: 7px 7px 3px 3px;
+}
+
+.vital__pip--hunger {
+  --pip: #d99a45;
+}
+
+.vital__pip--air {
+  --pip: #7cc4ff;
+  border-radius: 50%;
+}
+
+.vital__pip.is-full {
+  background: var(--pip);
+}
+
+.vital__pip.is-half {
+  background: linear-gradient(90deg, var(--pip) 50%, rgba(8, 11, 16, 0.75) 50%);
+}
+
+.hud__hurt {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(200, 20, 20, 0) 45%, rgba(200, 20, 20, 0.55));
+  opacity: 0;
+  pointer-events: none !important;
+}
+
+.hud__hurt.is-active {
+  animation: hurt-fade 480ms ease-out;
+}
+
+@keyframes hurt-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 /* ---- Overlays and panels -------------------------------------------------- */
 .overlay {
   position: absolute;

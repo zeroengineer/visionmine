@@ -23,6 +23,7 @@ import { getItemDef, ItemId, miningSpeed } from '@/gameplay/items/items';
 import { GAME_MODES } from '@/gameplay/modes/gameMode';
 import { FLY_SPEED_SCALE, PlayerController } from '@/gameplay/movement/PlayerController';
 import { Player, PLAYER_EYE_HEIGHT, PLAYER_HEIGHT } from '@/gameplay/player/Player';
+import { Vitals } from '@/gameplay/player/Vitals';
 import { clamp } from '@/utils/math';
 import { PlayerAvatar } from '@/rendering/avatar/PlayerAvatar';
 import { ChunkMeshScheduler } from '@/rendering/chunks/ChunkMeshScheduler';
@@ -96,6 +97,8 @@ export class WorldSession {
   readonly particles: DebrisParticles;
   readonly tnt: TntManager;
   readonly build: BuildTools;
+  /** Health, hunger and breath (survival). */
+  readonly vitals = new Vitals();
   /** Falling blocks and flowing water. */
   readonly ticker: BlockTicker;
   readonly attract: boolean;
@@ -201,7 +204,9 @@ export class WorldSession {
           ? sanitizeInventory(saved.inventory)
           : starterInventory(sessionStore.getState().mode),
       );
+    this.vitals.restore(saved);
     this.applyGameMode();
+    this.publishVitals();
     sessionStore.getState().setFlySpeed(1);
     if (saved?.flying) this.controller.setFlying(true);
 
@@ -313,6 +318,7 @@ export class WorldSession {
     this.controller.step(step);
     this.tnt.update(step);
     this.ticker.step();
+    this.updateVitals(step);
   }
 
   update(dt: number, elapsed: number): void {
@@ -416,6 +422,7 @@ export class WorldSession {
       pitch,
       flying,
       inventory: inventoryStore.getState().snapshot(),
+      ...this.vitals.snapshot(),
     };
   }
 
@@ -471,11 +478,22 @@ export class WorldSession {
         if (block === BlockId.Leaves && Math.random() < APPLE_CHANCE) {
           inventory.getState().add(ItemId.Apple, 1);
         }
+        this.vitals.exert(0.05);
         const held = selectedStack(inventory.getState());
         if (held && inventory.getState().wearSelected()) {
           uiStore.getState().flash(`Your ${getItemDef(held.item).name} broke`);
           this.engine.sfx.play('break');
         }
+      },
+      useItem: () => {
+        // Eating: right-click with food in hand, when hungry.
+        const held = selectedStack(inventory.getState());
+        const food = held ? getItemDef(held.item).food : 0;
+        if (food <= 0 || !this.vitals.eat(food)) return false;
+        inventory.getState().consumeSelected(1);
+        this.engine.sfx.play('place');
+        this.publishVitals();
+        return true;
       },
       onPicked: (block) => {
         if (rules().infiniteBlocks) inventory.getState().pick(block);
@@ -570,6 +588,7 @@ export class WorldSession {
     this.controller.allowFlying = rules.canFly;
     this.controller.maxAirJumps = rules.airJumps;
     this.controller.allowDash = rules.canDash;
+    this.vitals.enabled = rules.vitals;
     this.build.enabled = rules.buildTools;
     if (!rules.canFly) this.controller.setFlying(false);
     this.interaction.reach = rules.reach;
@@ -608,6 +627,55 @@ export class WorldSession {
       velocity.x += dx * push;
       velocity.y += Math.max(dy, 0.4) * push;
       velocity.z += dz * push;
+      this.hurt(Math.round(falloff * 16));
+    }
+  }
+
+  /** Advances hunger and breath, applies fall damage, and handles dying. */
+  private updateVitals(step: number): void {
+    const { player, vitals } = this;
+    // Always collected, so a fall made in creative is not charged after switching mode.
+    const landing = this.controller.consumeLanding();
+    if (!vitals.enabled) return;
+    const before = vitals.health;
+    vitals.update(step, {
+      headInWater: player.headInWater,
+      moving: Math.hypot(player.velocity.x, player.velocity.z) > 0.5,
+      sprinting: player.sprinting,
+    });
+    if (landing > 0) vitals.land(landing);
+    if (vitals.health < before) this.onHurt();
+    this.publishVitals();
+  }
+
+  /** Damage from outside the vitals' own rules (explosions). */
+  private hurt(amount: number): void {
+    if (this.vitals.damage(amount) > 0) this.onHurt();
+    this.publishVitals();
+  }
+
+  private onHurt(): void {
+    sessionStore.getState().markHurt();
+    this.engine.sfx.play('break');
+    if (this.vitals.dead) this.respawn();
+  }
+
+  /** Dying puts the player back at the world's spawn point, restored, with their inventory. */
+  private respawn(): void {
+    const { spawn, player } = this;
+    player.teleport(spawn.x, spawn.y, spawn.z);
+    this.controller.setFlying(false);
+    this.controller.placeOnGround();
+    this.controller.consumeLanding();
+    this.vitals.reset();
+    uiStore.getState().notify('You died. You wake at the place you first arrived.', 'error');
+  }
+
+  private publishVitals(): void {
+    const { health, hunger, air } = this.vitals;
+    const state = sessionStore.getState();
+    if (state.health !== health || state.hunger !== hunger || Math.abs(state.air - air) >= 0.25) {
+      state.setVitals(health, hunger, air);
     }
   }
 

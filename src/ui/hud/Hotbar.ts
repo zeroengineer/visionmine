@@ -5,6 +5,7 @@ import { sessionStore } from '@/state/sessionStore';
 import { getItemDef } from '@/gameplay/items/items';
 import { h, type View } from '../components/dom';
 import { createSlotElement, renderSlot } from '../components/slot';
+import { createVitalsBar } from './VitalsBar';
 
 const LABEL_VISIBLE_MS = 1600;
 
@@ -17,7 +18,14 @@ export function createHotbar(): View {
   });
   const label = h('div', { class: 'hotbar__label' });
   const bar = h('div', { class: 'hotbar__bar' }, ...slots.map((s) => s.el));
-  const el = h('div', { class: 'hotbar', attrs: { 'aria-label': 'Hotbar' } }, label, bar);
+  const vitals = createVitalsBar();
+  const el = h(
+    'div',
+    { class: 'hotbar', attrs: { 'aria-label': 'Hotbar' } },
+    label,
+    vitals.el,
+    bar,
+  );
   let labelTimer = 0;
 
   const render = (): void => {
@@ -55,6 +63,7 @@ export function createHotbar(): View {
     el,
     dispose() {
       window.clearTimeout(labelTimer);
+      vitals.dispose();
       for (const unsubscribe of unsubscribers) unsubscribe();
       el.remove();
     },
