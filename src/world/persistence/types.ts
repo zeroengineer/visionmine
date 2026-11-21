@@ -1,6 +1,7 @@
 import type { WorldConfig } from '../generation/config';
 
-export const SAVE_VERSION = 1;
+/** 2 added a state byte per edited block (see `EDIT_FORMAT` in codec.ts). */
+export const SAVE_VERSION = 2;
 
 export type SavedGameMode = 'creative' | 'survival';
 

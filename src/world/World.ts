@@ -4,8 +4,16 @@ import type { Chunk } from './chunks/Chunk';
 import { blockIndex, chunkKey, isValidY, toChunkCoord } from './chunks/coords';
 
 export interface WorldEvents {
-  /** A block was changed through `setBlock`. */
-  blockChanged: { x: number; y: number; z: number; previous: number; next: number };
+  /** A block or its state byte was changed through `setBlock`. */
+  blockChanged: {
+    x: number;
+    y: number;
+    z: number;
+    previous: number;
+    next: number;
+    previousMeta: number;
+    nextMeta: number;
+  };
   /** A chunk's blocks changed and its mesh is stale. `urgent` = caused by a player edit. */
   chunkDirty: { key: number; urgent: boolean };
   chunkAdded: { chunk: Chunk };
@@ -16,9 +24,23 @@ export interface WorldEvents {
  * The voxel world: loaded chunks plus the player's edits. All gameplay code reads
  * and writes blocks through this facade using world coordinates.
  *
- * Edits are stored separately from chunk data (`chunkKey → localIndex → blockId`)
- * so they survive chunk unloading and are the only thing that needs saving.
+ * Edits are stored separately from chunk data (`chunkKey → localIndex → cell`)
+ * so they survive chunk unloading and are the only thing that needs saving. A
+ * cell packs a block id and its state byte, see `packCell`.
  */
+/** Packs a block id and its state byte into one edit value. With no state this is just the id. */
+export function packCell(id: number, meta: number): number {
+  return (id & 0xff) | ((meta & 0xff) << 8);
+}
+
+export function cellBlock(cell: number): number {
+  return cell & 0xff;
+}
+
+export function cellMeta(cell: number): number {
+  return (cell >>> 8) & 0xff;
+}
+
 export class World {
   readonly events = new Emitter<WorldEvents>();
   private readonly chunks = new Map<number, Chunk>();
@@ -55,7 +77,10 @@ export class World {
   addChunk(chunk: Chunk): void {
     const edits = this.edits.get(chunk.key);
     if (edits) {
-      for (const [index, id] of edits) chunk.blocks[index] = id;
+      for (const [index, cell] of edits) {
+        chunk.blocks[index] = cellBlock(cell);
+        chunk.setMeta(index, cellMeta(cell));
+      }
     }
     this.chunks.set(chunk.key, chunk);
     this.events.emit('chunkAdded', { chunk });
@@ -74,11 +99,20 @@ export class World {
     return chunk.blocks[(x & CHUNK_MASK) + (z & CHUNK_MASK) * CHUNK_SIZE + y * 256]!;
   }
 
+  /** Returns the state byte of the block at a world position (0 where there is none). */
+  getMeta(x: number, y: number, z: number): number {
+    if (y < 0 || y >= 128) return 0;
+    const chunk = this.chunks.get(chunkKey(x >> 4, z >> 4));
+    if (!chunk || !chunk.meta) return 0;
+    return chunk.meta[(x & CHUNK_MASK) + (z & CHUNK_MASK) * CHUNK_SIZE + y * 256]!;
+  }
+
   /**
-   * Sets a block at integer world coordinates. Returns false when nothing changed
-   * (unloaded chunk, out of range, or same block).
+   * Sets a block, and optionally its state byte, at integer world coordinates.
+   * Returns false when nothing changed (unloaded chunk, out of range, or the
+   * same block in the same state).
    */
-  setBlock(x: number, y: number, z: number, id: number): boolean {
+  setBlock(x: number, y: number, z: number, id: number, meta = 0): boolean {
     if (!isValidY(y)) return false;
     const cx = x >> 4;
     const cz = z >> 4;
@@ -90,15 +124,18 @@ export class World {
     const lz = z & CHUNK_MASK;
     const index = blockIndex(lx, y, lz);
     const previous = chunk.blocks[index]!;
-    if (previous === id) return false;
+    const previousMeta = chunk.getMeta(index);
+    meta &= 0xff;
+    if (previous === id && previousMeta === meta) return false;
     chunk.blocks[index] = id;
+    chunk.setMeta(index, meta);
 
     let chunkEdits = this.edits.get(key);
     if (!chunkEdits) {
       chunkEdits = new Map();
       this.edits.set(key, chunkEdits);
     }
-    chunkEdits.set(index, id);
+    chunkEdits.set(index, packCell(id, meta));
     this.unsavedEdits.add(key);
 
     this.events.emit('chunkDirty', { key, urgent: true });
@@ -116,7 +153,15 @@ export class World {
     if (east && north) this.markDirty(cx + 1, cz - 1);
     if (east && south) this.markDirty(cx + 1, cz + 1);
 
-    this.events.emit('blockChanged', { x, y, z, previous, next: id });
+    this.events.emit('blockChanged', {
+      x,
+      y,
+      z,
+      previous,
+      next: id,
+      previousMeta,
+      nextMeta: meta,
+    });
     return true;
   }
 

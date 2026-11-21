@@ -4,18 +4,28 @@ import { sanitizeWorldConfig } from '../generation/config';
 import { SAVE_VERSION, type PlayerRecord, type WorldRecord } from './types';
 
 /**
- * Packs chunk edits into a typed array: each entry is `blockIndex << 8 | blockId`.
- * Compact, and structured-clone friendly for IndexedDB.
+ * Layout of packed chunk edits. Format 1 (saves before block state existed) is
+ * `blockIndex << 8 | blockId`; format 2 is `blockIndex << 16 | state << 8 | blockId`.
+ */
+export const EDIT_FORMAT = 2;
+
+/**
+ * Packs chunk edits (`blockIndex → cell`, a cell being `state << 8 | blockId`)
+ * into a typed array in the current format. Compact, and structured-clone
+ * friendly for IndexedDB.
  */
 export function encodeEdits(edits: ReadonlyMap<number, number>): Uint32Array {
   const data = new Uint32Array(edits.size);
   let i = 0;
-  for (const [index, id] of edits) data[i++] = (index << 8) | (id & 0xff);
+  for (const [index, cell] of edits) data[i++] = ((index << 16) | (cell & 0xffff)) >>> 0;
   return data;
 }
 
-/** Unpacks edits, silently dropping entries that are out of range or unknown. */
-export function decodeEdits(data: unknown): Map<number, number> {
+/**
+ * Unpacks edits written in the given format into `blockIndex → cell`, silently
+ * dropping entries that are out of range or name an unknown block.
+ */
+export function decodeEdits(data: unknown, format: number = EDIT_FORMAT): Map<number, number> {
   const edits = new Map<number, number>();
   const values: ArrayLike<unknown> | null =
     data instanceof Uint32Array || Array.isArray(data) ? (data as ArrayLike<unknown>) : null;
@@ -23,10 +33,12 @@ export function decodeEdits(data: unknown): Map<number, number> {
   for (let i = 0; i < values.length; i++) {
     const packed = values[i];
     if (typeof packed !== 'number' || !Number.isInteger(packed) || packed < 0) continue;
-    const index = packed >>> 8;
+    const index = format >= 2 ? packed >>> 16 : packed >>> 8;
     const id = packed & 0xff;
+    // Format 1 has no state byte; everything it stored is in the default state.
+    const meta = format >= 2 ? (packed >>> 8) & 0xff : 0;
     if (index >= CHUNK_VOLUME || !isValidBlockId(id)) continue;
-    edits.set(index, id);
+    edits.set(index, id | (meta << 8));
   }
   return edits;
 }
